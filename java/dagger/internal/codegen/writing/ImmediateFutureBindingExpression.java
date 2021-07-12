@@ -23,10 +23,13 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.Key;
-import dagger.model.RequestKind;
+import dagger.spi.model.Key;
+import dagger.spi.model.RequestKind;
 import javax.lang.model.SourceVersion;
 
 final class ImmediateFutureBindingExpression extends BindingExpression {
@@ -35,8 +38,9 @@ final class ImmediateFutureBindingExpression extends BindingExpression {
   private final DaggerTypes types;
   private final SourceVersion sourceVersion;
 
+  @AssistedInject
   ImmediateFutureBindingExpression(
-      Key key,
+      @Assisted Key key,
       ComponentBindingExpressions componentBindingExpressions,
       DaggerTypes types,
       SourceVersion sourceVersion) {
@@ -49,7 +53,7 @@ final class ImmediateFutureBindingExpression extends BindingExpression {
   @Override
   Expression getDependencyExpression(ClassName requestingClass) {
     return Expression.create(
-        types.wrapType(key.type(), ListenableFuture.class),
+        types.wrapType(key.type().java(), ListenableFuture.class),
         CodeBlock.of("$T.immediateFuture($L)", Futures.class, instanceExpression(requestingClass)));
   }
 
@@ -63,11 +67,18 @@ final class ImmediateFutureBindingExpression extends BindingExpression {
       //
       // For example, javac7 cannot detect that Futures.immediateFuture(ImmutableSet.of("T"))
       // can safely be assigned to ListenableFuture<Set<T>>.
-      if (!types.isSameType(expression.type(), key.type())) {
+      if (!types.isSameType(expression.type(), key.type().java())) {
         return CodeBlock.of(
-            "($T) $L", types.accessibleType(key.type(), requestingClass), expression.codeBlock());
+            "($T) $L",
+            types.accessibleType(key.type().java(), requestingClass),
+            expression.codeBlock());
       }
     }
     return expression.codeBlock();
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    ImmediateFutureBindingExpression create(Key key);
   }
 }

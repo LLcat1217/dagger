@@ -41,10 +41,11 @@ import dagger.Subcomponent;
 import dagger.internal.codegen.base.ComponentAnnotation;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.DependencyRequest;
-import dagger.model.Scope;
 import dagger.producers.CancellationPolicy;
-import dagger.producers.ProductionComponent;
+import dagger.spi.model.DependencyRequest;
+import dagger.spi.model.Scope;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -97,7 +98,7 @@ public abstract class ComponentDescriptor {
 
   /**
    * The set of component dependencies listed in {@link Component#dependencies} or {@link
-   * ProductionComponent#dependencies()}.
+   * dagger.producers.ProductionComponent#dependencies()}.
    */
   public abstract ImmutableSet<ComponentRequirement> dependencies();
 
@@ -240,19 +241,17 @@ public abstract class ComponentDescriptor {
 
   /** Returns the first component method associated with this binding request, if one exists. */
   public Optional<ComponentMethodDescriptor> firstMatchingComponentMethod(BindingRequest request) {
-    return componentMethods().stream()
-        .filter(method -> doesComponentMethodMatch(method, request))
-        .findFirst();
+    return Optional.ofNullable(firstMatchingComponentMethods().get(request));
   }
 
-  /** Returns true if the component method matches the binding request. */
-  private static boolean doesComponentMethodMatch(
-      ComponentMethodDescriptor componentMethod, BindingRequest request) {
-    return componentMethod
-        .dependencyRequest()
-        .map(BindingRequest::bindingRequest)
-        .filter(request::equals)
-        .isPresent();
+  @Memoized
+  ImmutableMap<BindingRequest, ComponentMethodDescriptor>
+      firstMatchingComponentMethods() {
+    Map<BindingRequest, ComponentMethodDescriptor> methods = new HashMap<>();
+    for (ComponentMethodDescriptor method : entryPointMethods()) {
+      methods.putIfAbsent(BindingRequest.bindingRequest(method.dependencyRequest().get()), method);
+    }
+    return ImmutableMap.copyOf(methods);
   }
 
   /** The entry point methods on the component type. Each has a {@link DependencyRequest}. */
@@ -326,7 +325,7 @@ public abstract class ComponentDescriptor {
         return returnType;
       }
       return BindingRequest.bindingRequest(dependencyRequest().get())
-          .requestedType(dependencyRequest().get().key().type(), types);
+          .requestedType(dependencyRequest().get().key().type().java(), types);
     }
 
     /** A {@link ComponentMethodDescriptor}builder for a method. */

@@ -16,11 +16,12 @@
 
 package dagger.internal.codegen.validation;
 
+import androidx.room.compiler.processing.XElement;
+import androidx.room.compiler.processing.compat.XConverters;
 import com.google.auto.common.MoreElements;
 import com.google.common.collect.ImmutableSet;
-import dagger.BindsInstance;
-import java.lang.annotation.Annotation;
-import java.util.Set;
+import com.squareup.javapoet.ClassName;
+import dagger.internal.codegen.javapoet.TypeNames;
 import javax.annotation.processing.Messager;
 import javax.inject.Inject;
 import javax.lang.model.element.Element;
@@ -29,7 +30,7 @@ import javax.lang.model.element.Element;
  * Processing step that validates that the {@code BindsInstance} annotation is applied to the
  * correct elements.
  */
-public final class BindsInstanceProcessingStep extends TypeCheckingProcessingStep<Element> {
+public final class BindsInstanceProcessingStep extends XTypeCheckingProcessingStep<XElement> {
   private final BindsInstanceMethodValidator methodValidator;
   private final BindsInstanceParameterValidator parameterValidator;
   private final Messager messager;
@@ -39,19 +40,19 @@ public final class BindsInstanceProcessingStep extends TypeCheckingProcessingSte
       BindsInstanceMethodValidator methodValidator,
       BindsInstanceParameterValidator parameterValidator,
       Messager messager) {
-    super(element -> element);
     this.methodValidator = methodValidator;
     this.parameterValidator = parameterValidator;
     this.messager = messager;
   }
 
   @Override
-  public Set<? extends Class<? extends Annotation>> annotations() {
-    return ImmutableSet.of(BindsInstance.class);
+  public ImmutableSet<ClassName> annotationClassNames() {
+    return ImmutableSet.of(TypeNames.BINDS_INSTANCE);
   }
 
   @Override
-  protected void process(Element element, ImmutableSet<Class<? extends Annotation>> annotations) {
+  protected void process(XElement xElement, ImmutableSet<ClassName> annotations) {
+    Element element = XConverters.toJavac(xElement);
     switch (element.getKind()) {
       case PARAMETER:
         parameterValidator.validate(MoreElements.asVariable(element)).printMessagesTo(messager);

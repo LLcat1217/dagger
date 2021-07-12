@@ -33,7 +33,9 @@ import static javax.lang.model.element.Modifier.PRIVATE;
 import static javax.lang.model.element.Modifier.PUBLIC;
 import static javax.lang.model.element.Modifier.STATIC;
 
-import com.google.auto.common.MoreElements;
+import androidx.room.compiler.processing.XTypeElement;
+import androidx.room.compiler.processing.compat.XConverters;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
@@ -44,7 +46,6 @@ import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.TypeVariableName;
-import dagger.assisted.AssistedFactory;
 import dagger.internal.codegen.base.SourceFileGenerationException;
 import dagger.internal.codegen.base.SourceFileGenerator;
 import dagger.internal.codegen.binding.AssistedInjectionAnnotations;
@@ -52,11 +53,11 @@ import dagger.internal.codegen.binding.AssistedInjectionAnnotations.AssistedFact
 import dagger.internal.codegen.binding.AssistedInjectionAnnotations.AssistedParameter;
 import dagger.internal.codegen.binding.BindingFactory;
 import dagger.internal.codegen.binding.ProvisionBinding;
+import dagger.internal.codegen.javapoet.TypeNames;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.internal.codegen.validation.TypeCheckingProcessingStep;
 import dagger.internal.codegen.validation.ValidationReport;
-import java.lang.annotation.Annotation;
+import dagger.internal.codegen.validation.XTypeCheckingProcessingStep;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -74,7 +75,7 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 /** An annotation processor for {@link dagger.assisted.AssistedFactory}-annotated types. */
-final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<TypeElement> {
+final class AssistedFactoryProcessingStep extends XTypeCheckingProcessingStep<XTypeElement> {
   private final Messager messager;
   private final Filer filer;
   private final SourceVersion sourceVersion;
@@ -90,7 +91,6 @@ final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<Typ
       DaggerElements elements,
       DaggerTypes types,
       BindingFactory bindingFactory) {
-    super(MoreElements::asType);
     this.messager = messager;
     this.filer = filer;
     this.sourceVersion = sourceVersion;
@@ -100,13 +100,14 @@ final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<Typ
   }
 
   @Override
-  public ImmutableSet<Class<? extends Annotation>> annotations() {
-    return ImmutableSet.of(AssistedFactory.class);
+  public ImmutableSet<ClassName> annotationClassNames() {
+    return ImmutableSet.of(TypeNames.ASSISTED_FACTORY);
   }
 
   @Override
-  protected void process(
-      TypeElement factory, ImmutableSet<Class<? extends Annotation>> annotations) {
+  protected void process(XTypeElement xElement, ImmutableSet<ClassName> annotations) {
+    // TODO(bcorso): Remove conversion to javac type and use XProcessing throughout.
+    TypeElement factory = XConverters.toJavac(xElement);
     ValidationReport<TypeElement> report = new AssistedFactoryValidator().validate(factory);
     report.printMessagesTo(messager);
     if (report.isClean()) {
@@ -137,7 +138,7 @@ final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<Typ
       }
 
       ImmutableSet<ExecutableElement> abstractFactoryMethods =
-          AssistedInjectionAnnotations.assistedFactoryMethods(factory, elements, types);
+          AssistedInjectionAnnotations.assistedFactoryMethods(factory, elements);
 
       if (abstractFactoryMethods.isEmpty()) {
         report.addError(
@@ -226,11 +227,6 @@ final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<Typ
     }
 
     @Override
-    public ClassName nameGeneratedType(ProvisionBinding binding) {
-      return generatedClassNameForBinding(binding);
-    }
-
-    @Override
     public Element originatingElement(ProvisionBinding binding) {
       return binding.bindingElement().get();
     }
@@ -268,10 +264,10 @@ final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<Typ
     //   }
     // }
     @Override
-    public Optional<TypeSpec.Builder> write(ProvisionBinding binding) {
+    public ImmutableList<TypeSpec.Builder> topLevelTypes(ProvisionBinding binding) {
       TypeElement factory = asType(binding.bindingElement().get());
 
-      ClassName name = nameGeneratedType(binding);
+      ClassName name = generatedClassNameForBinding(binding);
       TypeSpec.Builder builder =
           TypeSpec.classBuilder(name)
               .addModifiers(PUBLIC, FINAL)
@@ -333,7 +329,7 @@ final class AssistedFactoryProcessingStep extends TypeCheckingProcessingStep<Typ
                       name,
                       delegateFactoryParam)
                   .build());
-      return Optional.of(builder);
+      return ImmutableList.of(builder);
     }
 
     /** Returns the generated factory {@link TypeName type} for an @AssistedInject constructor. */

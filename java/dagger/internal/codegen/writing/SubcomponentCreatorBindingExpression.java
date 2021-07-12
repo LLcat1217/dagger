@@ -17,24 +17,41 @@
 package dagger.internal.codegen.writing;
 
 import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.ContributionBinding;
+import dagger.internal.codegen.javapoet.CodeBlocks;
 import dagger.internal.codegen.javapoet.Expression;
-import javax.lang.model.type.TypeMirror;
+import dagger.internal.codegen.writing.ComponentImplementation.ShardImplementation;
 
 /** A binding expression for a subcomponent creator that just invokes the constructor. */
 final class SubcomponentCreatorBindingExpression extends SimpleInvocationBindingExpression {
-  private final TypeMirror creatorType;
-  private final String creatorImplementationName;
+  private final ShardImplementation shardImplementation;
+  private final ContributionBinding binding;
 
+  @AssistedInject
   SubcomponentCreatorBindingExpression(
-      ContributionBinding binding, String creatorImplementationName) {
+      @Assisted ContributionBinding binding, ComponentImplementation componentImplementation) {
     super(binding);
-    this.creatorType = binding.key().type();
-    this.creatorImplementationName = creatorImplementationName;
+    this.binding = binding;
+    this.shardImplementation = componentImplementation.shardImplementation(binding);
   }
 
   @Override
   Expression getDependencyExpression(ClassName requestingClass) {
-    return Expression.create(creatorType, "new $L()", creatorImplementationName);
+    return Expression.create(
+        binding.key().type().java(),
+        "new $T($L)",
+        shardImplementation.getSubcomponentCreatorSimpleName(binding.key()),
+        shardImplementation.componentFieldsByImplementation().values().stream()
+            .map(field -> CodeBlock.of("$N", field))
+            .collect(CodeBlocks.toParametersCodeBlock()));
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    SubcomponentCreatorBindingExpression create(ContributionBinding binding);
   }
 }

@@ -32,10 +32,10 @@ import static dagger.internal.codegen.javapoet.TypeNames.PROVIDER_OF_LAZY;
 import static dagger.internal.codegen.javapoet.TypeNames.SET_FACTORY;
 import static dagger.internal.codegen.javapoet.TypeNames.SET_OF_PRODUCED_PRODUCER;
 import static dagger.internal.codegen.javapoet.TypeNames.SET_PRODUCER;
-import static dagger.model.BindingKind.ASSISTED_INJECTION;
-import static dagger.model.BindingKind.INJECTION;
-import static dagger.model.BindingKind.MULTIBOUND_MAP;
-import static dagger.model.BindingKind.MULTIBOUND_SET;
+import static dagger.spi.model.BindingKind.ASSISTED_INJECTION;
+import static dagger.spi.model.BindingKind.INJECTION;
+import static dagger.spi.model.BindingKind.MULTIBOUND_MAP;
+import static dagger.spi.model.BindingKind.MULTIBOUND_SET;
 import static javax.lang.model.SourceVersion.isName;
 
 import com.google.auto.common.MoreElements;
@@ -54,12 +54,12 @@ import com.squareup.javapoet.TypeVariableName;
 import dagger.internal.SetFactory;
 import dagger.internal.codegen.base.MapType;
 import dagger.internal.codegen.base.SetType;
-import dagger.model.DependencyRequest;
-import dagger.model.RequestKind;
 import dagger.producers.Produced;
 import dagger.producers.Producer;
 import dagger.producers.internal.SetOfProducedProducer;
 import dagger.producers.internal.SetProducer;
+import dagger.spi.model.DependencyRequest;
+import dagger.spi.model.RequestKind;
 import java.util.List;
 import javax.inject.Provider;
 import javax.lang.model.SourceVersion;
@@ -99,7 +99,7 @@ public class SourceFiles {
             FrameworkField.create(
                 ClassName.get(
                     frameworkTypeMapper.getFrameworkType(dependency.kind()).frameworkClass()),
-                TypeName.get(dependency.key().type()),
+                TypeName.get(dependency.key().type().java()),
                 DependencyVariableNamer.name(dependency)));
   }
 
@@ -272,7 +272,16 @@ public class SourceFiles {
    */
   // TODO(gak): maybe this should be a function of TypeMirrors instead of Elements?
   public static String simpleVariableName(TypeElement typeElement) {
-    String candidateName = UPPER_CAMEL.to(LOWER_CAMEL, typeElement.getSimpleName().toString());
+    return simpleVariableName(ClassName.get(typeElement));
+  }
+
+  /**
+   * Returns a name to be used for variables of the given {@linkplain ClassName}. Prefer
+   * semantically meaningful variable names, but if none can be derived, this will produce something
+   * readable.
+   */
+  public static String simpleVariableName(ClassName className) {
+    String candidateName = UPPER_CAMEL.to(LOWER_CAMEL, className.simpleName());
     String variableName = protectAgainstKeywords(candidateName);
     verify(isName(variableName), "'%s' was expected to be a valid variable name");
     return variableName;

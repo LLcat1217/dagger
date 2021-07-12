@@ -17,7 +17,7 @@
 package dagger.hilt.android.processor.internal;
 
 import static com.google.testing.compile.CompilationSubject.assertThat;
-import static dagger.hilt.android.processor.AndroidCompilers.compiler;
+import static dagger.hilt.android.testing.compile.HiltCompilerTests.compiler;
 
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.JavaFileObjects;
@@ -79,7 +79,7 @@ public final class GeneratorsTest {
                 "      @Nullable String androidxNullable,",
                 "      @javax.annotation.Nullable String javaxNullable) {",
                 "    super(supportNullable, androidxNullable, javaxNullable);",
-                "    init();",
+                "    _initHiltInternal();",
                 "  }",
                 "}"));
   }
@@ -174,7 +174,6 @@ public final class GeneratorsTest {
             " public MyView(Context context, AttributeSet attributeSet){",
             "   super(context, attributeSet);",
             " }",
-            "",
             "}");
     Compilation compilation = compiler().compile(myView);
     assertThat(compilation).succeeded();

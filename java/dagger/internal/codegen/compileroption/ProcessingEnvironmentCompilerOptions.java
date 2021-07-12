@@ -183,11 +183,9 @@ public final class ProcessingEnvironmentCompilerOptions extends CompilerOptions 
   public int keysPerComponentShard(TypeElement component) {
     if (processingEnvironment.getOptions().containsKey(KEYS_PER_COMPONENT_SHARD)) {
       checkArgument(
-          "dagger.internal.codegen".contentEquals(
-              MoreElements.getPackage(component).getQualifiedName()),
+          MoreElements.getPackage(component).getQualifiedName().toString().startsWith("dagger."),
           "Cannot set %s. It is only meant for internal testing.", KEYS_PER_COMPONENT_SHARD);
-      return Integer.parseInt(
-          processingEnvironment.getOptions().get(KEYS_PER_COMPONENT_SHARD));
+      return Integer.parseInt(processingEnvironment.getOptions().get(KEYS_PER_COMPONENT_SHARD));
     }
     return super.keysPerComponentShard(component);
   }

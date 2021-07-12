@@ -54,7 +54,7 @@ import dagger.internal.codegen.compileroption.ValidationType;
 import dagger.internal.codegen.kotlin.KotlinMetadataUtil;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.Scope;
+import dagger.spi.model.Scope;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Deque;
@@ -318,7 +318,7 @@ public final class ComponentDescriptorValidator {
       Set<ComponentRequirement> mustBePassed =
           Sets.filter(
               componentModuleAndDependencyRequirements,
-              input -> input.nullPolicy(elements, types, metadataUtil).equals(NullPolicy.THROW));
+              input -> input.nullPolicy(elements, metadataUtil).equals(NullPolicy.THROW));
       // Component requirements that the creator must be able to set, but can't
       Set<ComponentRequirement> missingRequirements =
           Sets.difference(mustBePassed, creatorModuleAndDependencyRequirements);

@@ -16,34 +16,38 @@
 
 package dagger.internal.codegen.writing;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.squareup.javapoet.ClassName;
+import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.ComponentDescriptor.ComponentMethodDescriptor;
 import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.binding.FrameworkType;
 import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.Key;
+import dagger.internal.codegen.writing.ComponentImplementation.ShardImplementation;
+import dagger.producers.internal.Producers;
+import dagger.spi.model.Key;
 
 /** Binding expression for producer node instances. */
 final class ProducerNodeInstanceBindingExpression extends FrameworkInstanceBindingExpression {
-  /** The component defining this binding. */
-  private final ComponentImplementation componentImplementation;
+  private final ShardImplementation shardImplementation;
   private final Key key;
   private final ProducerEntryPointView producerEntryPointView;
 
+  @AssistedInject
   ProducerNodeInstanceBindingExpression(
-      ContributionBinding binding,
-      FrameworkInstanceSupplier frameworkInstanceSupplier,
+      @Assisted ContributionBinding binding,
+      @Assisted FrameworkInstanceSupplier frameworkInstanceSupplier,
       DaggerTypes types,
       DaggerElements elements,
       ComponentImplementation componentImplementation) {
     super(binding, frameworkInstanceSupplier, types, elements);
-    this.componentImplementation = checkNotNull(componentImplementation);
+    this.shardImplementation = componentImplementation.shardImplementation(binding);
     this.key = binding.key();
-    this.producerEntryPointView = new ProducerEntryPointView(types);
+    this.producerEntryPointView = new ProducerEntryPointView(shardImplementation, types);
   }
 
   @Override
@@ -54,7 +58,13 @@ final class ProducerNodeInstanceBindingExpression extends FrameworkInstanceBindi
   @Override
   Expression getDependencyExpression(ClassName requestingClass) {
     Expression result = super.getDependencyExpression(requestingClass);
-    componentImplementation.addCancellableProducerKey(key);
+    shardImplementation.addCancellation(
+        key,
+        CodeBlock.of(
+            "$T.cancel($L, $N);",
+            Producers.class,
+            result.codeBlock(),
+            ComponentImplementation.MAY_INTERRUPT_IF_RUNNING_PARAM));
     return result;
   }
 
@@ -62,8 +72,14 @@ final class ProducerNodeInstanceBindingExpression extends FrameworkInstanceBindi
   Expression getDependencyExpressionForComponentMethod(
       ComponentMethodDescriptor componentMethod, ComponentImplementation component) {
     return producerEntryPointView
-        .getProducerEntryPointField(this, componentMethod, component)
+        .getProducerEntryPointField(this, componentMethod, component.name())
         .orElseGet(
             () -> super.getDependencyExpressionForComponentMethod(componentMethod, component));
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    ProducerNodeInstanceBindingExpression create(
+        ContributionBinding binding, FrameworkInstanceSupplier frameworkInstanceSupplier);
   }
 }

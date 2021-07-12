@@ -17,27 +17,37 @@
 package dagger.hilt.processor.internal.root;
 
 import static com.google.common.base.Preconditions.checkState;
-import static dagger.internal.codegen.extension.DaggerStreams.toImmutableList;
+import static dagger.hilt.processor.internal.HiltCompilerOptions.isCrossCompilationRootValidationDisabled;
+import static dagger.hilt.processor.internal.HiltCompilerOptions.isSharedTestComponentsEnabled;
+import static dagger.hilt.processor.internal.HiltCompilerOptions.useAggregatingRootProcessor;
 import static dagger.internal.codegen.extension.DaggerStreams.toImmutableSet;
-import static javax.lang.model.element.Modifier.PUBLIC;
 import static net.ltgt.gradle.incap.IncrementalAnnotationProcessorType.AGGREGATING;
+import static net.ltgt.gradle.incap.IncrementalAnnotationProcessorType.DYNAMIC;
+import static net.ltgt.gradle.incap.IncrementalAnnotationProcessorType.ISOLATING;
 
 import com.google.auto.common.MoreElements;
 import com.google.auto.service.AutoService;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.squareup.javapoet.ClassName;
+import dagger.hilt.processor.internal.BadInputException;
 import dagger.hilt.processor.internal.BaseProcessor;
-import dagger.hilt.processor.internal.ComponentDescriptor;
-import dagger.hilt.processor.internal.ProcessorErrors;
-import dagger.hilt.processor.internal.aggregateddeps.ComponentDependencies;
-import dagger.hilt.processor.internal.definecomponent.DefineComponents;
+import dagger.hilt.processor.internal.aggregateddeps.AggregatedDepsMetadata;
+import dagger.hilt.processor.internal.aliasof.AliasOfPropagatedDataMetadata;
+import dagger.hilt.processor.internal.definecomponent.DefineComponentClassesMetadata;
+import dagger.hilt.processor.internal.earlyentrypoint.AggregatedEarlyEntryPointMetadata;
 import dagger.hilt.processor.internal.generatesrootinput.GeneratesRootInputs;
-import java.io.IOException;
-import java.util.ArrayList;
+import dagger.hilt.processor.internal.root.ir.AggregatedDepsIr;
+import dagger.hilt.processor.internal.root.ir.AggregatedEarlyEntryPointIr;
+import dagger.hilt.processor.internal.root.ir.AggregatedRootIr;
+import dagger.hilt.processor.internal.root.ir.AggregatedRootIrValidator;
+import dagger.hilt.processor.internal.root.ir.AggregatedUninstallModulesIr;
+import dagger.hilt.processor.internal.root.ir.AliasOfPropagatedDataIr;
+import dagger.hilt.processor.internal.root.ir.ComponentTreeDepsIr;
+import dagger.hilt.processor.internal.root.ir.ComponentTreeDepsIrCreator;
+import dagger.hilt.processor.internal.root.ir.DefineComponentClassesIr;
+import dagger.hilt.processor.internal.root.ir.InvalidRootsException;
+import dagger.hilt.processor.internal.root.ir.ProcessedRootSentinelIr;
+import dagger.hilt.processor.internal.uninstallmodules.AggregatedUninstallModulesMetadata;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.Processor;
@@ -47,20 +57,24 @@ import javax.lang.model.element.TypeElement;
 import net.ltgt.gradle.incap.IncrementalAnnotationProcessor;
 
 /** Processor that outputs dagger components based on transitive build deps. */
-@IncrementalAnnotationProcessor(AGGREGATING)
+@IncrementalAnnotationProcessor(DYNAMIC)
 @AutoService(Processor.class)
 public final class RootProcessor extends BaseProcessor {
-  private final List<ClassName> rootNames = new ArrayList<>();
-  private final Set<ClassName> processed = new HashSet<>();
-  private boolean isTestEnv;
-  // TODO(bcorso): Consider using a Dagger component to create/scope these objects
-  private final DefineComponents defineComponents = DefineComponents.create();
+
+  private boolean processed;
   private GeneratesRootInputs generatesRootInputs;
 
   @Override
   public synchronized void init(ProcessingEnvironment processingEnvironment) {
     super.init(processingEnvironment);
     generatesRootInputs = new GeneratesRootInputs(processingEnvironment);
+  }
+
+  @Override
+  public ImmutableSet<String> additionalProcessingOptions() {
+    return useAggregatingRootProcessor(getProcessingEnv())
+        ? ImmutableSet.of(AGGREGATING.getProcessorOption())
+        : ImmutableSet.of(ISOLATING.getProcessorOption());
   }
 
   @Override
@@ -76,108 +90,118 @@ public final class RootProcessor extends BaseProcessor {
   @Override
   public void processEach(TypeElement annotation, Element element) throws Exception {
     TypeElement rootElement = MoreElements.asType(element);
-    boolean isTestRoot = RootType.of(getProcessingEnv(), rootElement).isTestRoot();
-    checkState(
-        rootNames.isEmpty() || isTestEnv == isTestRoot,
-        "Cannot mix test roots with non-test roots:"
-            + "\n\tNon-Test Roots: %s"
-            + "\n\tTest Roots: %s",
-        isTestRoot ? rootNames : rootElement,
-        isTestRoot ? rootElement : rootNames);
-    isTestEnv = isTestRoot;
-
-    rootNames.add(ClassName.get(rootElement));
-    if (isTestEnv) {
+    // TODO(bcorso): Move this logic into a separate isolating processor to avoid regenerating it
+    // for unrelated changes in Gradle.
+    RootType rootType = RootType.of(rootElement);
+    if (rootType.isTestRoot()) {
       new TestInjectorGenerator(
-          getProcessingEnv(),
-          TestRootMetadata.of(getProcessingEnv(), rootElement)).generate();
-    } else {
-      ProcessorErrors.checkState(
-          rootNames.size() <= 1, element, "More than one root found: %s", rootNames);
+              getProcessingEnv(), TestRootMetadata.of(getProcessingEnv(), rootElement))
+          .generate();
     }
+    TypeElement originatingRootElement =
+        Root.create(rootElement, getProcessingEnv()).originatingRootElement();
+    new AggregatedRootGenerator(rootElement, originatingRootElement, annotation, getProcessingEnv())
+        .generate();
   }
 
   @Override
   public void postRoundProcess(RoundEnvironment roundEnv) throws Exception {
+    if (!useAggregatingRootProcessor(getProcessingEnv())) {
+      return;
+    }
     Set<Element> newElements = generatesRootInputs.getElementsToWaitFor(roundEnv);
-    if (!processed.isEmpty() ) {
+    if (processed) {
       checkState(
           newElements.isEmpty(),
           "Found extra modules after compilation: %s\n"
               + "(If you are adding an annotation processor that generates root input for hilt, "
               + "the annotation must be annotated with @dagger.hilt.GeneratesRootInput.\n)",
           newElements);
+    } else if (newElements.isEmpty()) {
+      processed = true;
+
+      ImmutableSet<AggregatedRootIr> rootsToProcess = rootsToProcess();
+      if (rootsToProcess.isEmpty()) {
+        return;
+      }
+
+      // Generate an @ComponentTreeDeps for each unique component tree.
+      ComponentTreeDepsGenerator componentTreeDepsGenerator =
+          new ComponentTreeDepsGenerator(getProcessingEnv());
+      for (ComponentTreeDepsMetadata metadata : componentTreeDepsMetadatas(rootsToProcess)) {
+        componentTreeDepsGenerator.generate(metadata);
+      }
+
+      // Generate a sentinel for all processed roots.
+      for (AggregatedRootIr ir : rootsToProcess) {
+        TypeElement rootElement = getElementUtils().getTypeElement(ir.getRoot().canonicalName());
+        new ProcessedRootSentinelGenerator(rootElement, getProcessingEnv()).generate();
+      }
     }
+  }
 
-    if (!newElements.isEmpty()) {
-      // Skip further processing since there's new elements that generate root inputs in this round.
-      return;
-    }
+  private ImmutableSet<AggregatedRootIr> rootsToProcess() {
+    ImmutableSet<ProcessedRootSentinelIr> processedRoots =
+        ProcessedRootSentinelMetadata.from(getElementUtils()).stream()
+            .map(ProcessedRootSentinelMetadata::toIr)
+            .collect(toImmutableSet());
+    ImmutableSet<AggregatedRootIr> aggregatedRoots =
+        AggregatedRootMetadata.from(processingEnv).stream()
+            .map(AggregatedRootMetadata::toIr)
+            .collect(toImmutableSet());
 
-    ImmutableList<Root> rootsToProcess =
-        rootNames.stream()
-            .filter(rootName -> !processed.contains(rootName))
-            // We create a new root element each round to avoid the jdk8 bug where
-            // TypeElement.equals does not work for elements across processing rounds.
-            .map(rootName -> getElementUtils().getTypeElement(rootName.toString()))
-            .map(rootElement -> Root.create(rootElement, getProcessingEnv()))
-            .collect(toImmutableList());
-
-    if (rootsToProcess.isEmpty()) {
-      // Skip further processing since there's no roots that need processing.
-      return;
-    }
-
-    // TODO(bcorso): Currently, if there's an exception in any of the roots we stop processing
-    // all roots. We should consider if it's worth trying to continue processing for other
-    // roots. At the moment, I think it's rare that if one root failed the others would not.
+    boolean isCrossCompilationRootValidationDisabled =
+        isCrossCompilationRootValidationDisabled(
+            aggregatedRoots.stream()
+                .map(ir -> getElementUtils().getTypeElement(ir.getRoot().canonicalName()))
+                .collect(toImmutableSet()),
+            processingEnv);
     try {
-      ImmutableSet<ComponentDescriptor> componentDescriptors =
-          defineComponents.getComponentDescriptors(getElementUtils());
-      ComponentTree tree = ComponentTree.from(componentDescriptors);
-      ComponentDependencies deps =
-          ComponentDependencies.from(componentDescriptors, getElementUtils());
-      ImmutableList<RootMetadata> rootMetadatas =
-          rootsToProcess.stream()
-              .map(root -> RootMetadata.create(root, tree, deps, getProcessingEnv()))
-              .collect(toImmutableList());
-
-      for (RootMetadata rootMetadata : rootMetadatas) {
-        setProcessingState(rootMetadata.root());
-        generateComponents(rootMetadata);
-      }
-
-      if (isTestEnv) {
-        generateTestComponentData(rootMetadatas);
-      }
-    } catch (Exception e) {
-      for (Root root : rootsToProcess) {
-        processed.add(root.classname());
-      }
-      throw e;
+      return ImmutableSet.copyOf(
+          AggregatedRootIrValidator.rootsToProcess(
+              isCrossCompilationRootValidationDisabled, processedRoots, aggregatedRoots));
+    } catch (InvalidRootsException ex) {
+      throw new BadInputException(ex.getMessage());
     }
   }
 
-  private void setProcessingState(Root root) {
-    processed.add(root.classname());
-  }
+  private ImmutableSet<ComponentTreeDepsMetadata> componentTreeDepsMetadatas(
+      ImmutableSet<AggregatedRootIr> aggregatedRoots) {
+    ImmutableSet<DefineComponentClassesIr> defineComponentDeps =
+        DefineComponentClassesMetadata.from(getElementUtils()).stream()
+            .map(DefineComponentClassesMetadata::toIr)
+            .collect(toImmutableSet());
+    ImmutableSet<AliasOfPropagatedDataIr> aliasOfDeps =
+        AliasOfPropagatedDataMetadata.from(getElementUtils()).stream()
+            .map(AliasOfPropagatedDataMetadata::toIr)
+            .collect(toImmutableSet());
+    ImmutableSet<AggregatedDepsIr> aggregatedDeps =
+        AggregatedDepsMetadata.from(getElementUtils()).stream()
+            .map(AggregatedDepsMetadata::toIr)
+            .collect(toImmutableSet());
+    ImmutableSet<AggregatedUninstallModulesIr> aggregatedUninstallModulesDeps =
+        AggregatedUninstallModulesMetadata.from(getElementUtils()).stream()
+            .map(AggregatedUninstallModulesMetadata::toIr)
+            .collect(toImmutableSet());
+    ImmutableSet<AggregatedEarlyEntryPointIr> aggregatedEarlyEntryPointDeps =
+        AggregatedEarlyEntryPointMetadata.from(getElementUtils()).stream()
+            .map(AggregatedEarlyEntryPointMetadata::toIr)
+            .collect(toImmutableSet());
 
-  private void generateComponents(RootMetadata rootMetadata) throws IOException {
-    RootGenerator.generate(rootMetadata, getProcessingEnv());
-  }
-
-  private void generateTestComponentData(ImmutableList<RootMetadata> rootMetadatas)
-      throws IOException {
-    for (RootMetadata rootMetadata : rootMetadatas) {
-      // TODO(bcorso): Consider moving this check earlier into processEach.
-      TypeElement testElement = rootMetadata.testRootMetadata().testElement();
-      ProcessorErrors.checkState(
-          testElement.getModifiers().contains(PUBLIC),
-          testElement,
-          "Hilt tests must be public, but found: %s",
-          testElement);
-      new TestComponentDataGenerator(getProcessingEnv(), rootMetadata).generate();
-    }
-    new TestComponentDataSupplierGenerator(getProcessingEnv(), rootMetadatas).generate();
+    // We should be guaranteed that there are no mixed roots, so check if this is prod or test.
+    boolean isTest = aggregatedRoots.stream().anyMatch(AggregatedRootIr::isTestRoot);
+    Set<ComponentTreeDepsIr> componentTreeDeps =
+        ComponentTreeDepsIrCreator.components(
+            isTest,
+            isSharedTestComponentsEnabled(processingEnv),
+            aggregatedRoots,
+            defineComponentDeps,
+            aliasOfDeps,
+            aggregatedDeps,
+            aggregatedUninstallModulesDeps,
+            aggregatedEarlyEntryPointDeps);
+    return componentTreeDeps.stream()
+        .map(it -> ComponentTreeDepsMetadata.from(it, getElementUtils()))
+        .collect(toImmutableSet());
   }
 }

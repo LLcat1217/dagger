@@ -16,40 +16,41 @@
 
 package dagger.internal.codegen.validation;
 
+import androidx.room.compiler.processing.XTypeElement;
+import androidx.room.compiler.processing.compat.XConverters;
 import com.google.auto.common.MoreElements;
 import com.google.common.collect.ImmutableSet;
-import dagger.producers.ProductionComponent;
-import dagger.producers.ProductionSubcomponent;
-import java.lang.annotation.Annotation;
-import java.util.Set;
+import com.squareup.javapoet.ClassName;
+import dagger.internal.codegen.javapoet.TypeNames;
 import javax.annotation.processing.Messager;
 import javax.inject.Inject;
 import javax.lang.model.element.TypeElement;
 
 /**
  * A processing step that is responsible for generating a special module for a {@link
- * ProductionComponent} or {@link ProductionSubcomponent}.
+ * dagger.producers.ProductionComponent} or {@link dagger.producers.ProductionSubcomponent}.
  */
-public final class MonitoringModuleProcessingStep extends TypeCheckingProcessingStep<TypeElement> {
+public final class MonitoringModuleProcessingStep
+    extends XTypeCheckingProcessingStep<XTypeElement> {
   private final Messager messager;
   private final MonitoringModuleGenerator monitoringModuleGenerator;
 
   @Inject
   MonitoringModuleProcessingStep(
       Messager messager, MonitoringModuleGenerator monitoringModuleGenerator) {
-    super(MoreElements::asType);
     this.messager = messager;
     this.monitoringModuleGenerator = monitoringModuleGenerator;
   }
 
   @Override
-  public Set<? extends Class<? extends Annotation>> annotations() {
-    return ImmutableSet.of(ProductionComponent.class, ProductionSubcomponent.class);
+  public ImmutableSet<ClassName> annotationClassNames() {
+    return ImmutableSet.of(TypeNames.PRODUCTION_COMPONENT, TypeNames.PRODUCTION_SUBCOMPONENT);
   }
 
   @Override
-  protected void process(
-      TypeElement element, ImmutableSet<Class<? extends Annotation>> annotations) {
-      monitoringModuleGenerator.generate(MoreElements.asType(element), messager);
+  protected void process(XTypeElement xElement, ImmutableSet<ClassName> annotations) {
+    // TODO(bcorso): Remove conversion to javac type and use XProcessing throughout.
+    TypeElement element = XConverters.toJavac(xElement);
+    monitoringModuleGenerator.generate(MoreElements.asType(element), messager);
   }
 }

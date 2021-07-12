@@ -43,9 +43,10 @@ import com.squareup.javapoet.TypeName;
 import dagger.assisted.Assisted;
 import dagger.assisted.AssistedFactory;
 import dagger.assisted.AssistedInject;
+import dagger.internal.codegen.javapoet.TypeNames;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.BindingKind;
+import dagger.spi.model.BindingKind;
 import java.util.List;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -59,14 +60,14 @@ import javax.lang.model.type.TypeMirror;
 public final class AssistedInjectionAnnotations {
   /** Returns the factory method for the given factory {@link TypeElement}. */
   public static ExecutableElement assistedFactoryMethod(
-      TypeElement factory, DaggerElements elements, DaggerTypes types) {
-    return getOnlyElement(assistedFactoryMethods(factory, elements, types));
+      TypeElement factory, DaggerElements elements) {
+    return getOnlyElement(assistedFactoryMethods(factory, elements));
   }
 
   /** Returns the list of abstract factory methods for the given factory {@link TypeElement}. */
   public static ImmutableSet<ExecutableElement> assistedFactoryMethods(
-      TypeElement factory, DaggerElements elements, DaggerTypes types) {
-    return MoreElements.getLocalAndInheritedMethods(factory, types, elements).stream()
+      TypeElement factory, DaggerElements elements) {
+    return elements.getLocalAndInheritedMethods(factory).stream()
         .filter(method -> method.getModifiers().contains(ABSTRACT))
         .filter(method -> !method.isDefault())
         .collect(toImmutableSet());
@@ -96,7 +97,7 @@ public final class AssistedInjectionAnnotations {
     checkArgument(binding.kind() == BindingKind.ASSISTED_INJECTION);
     ExecutableElement constructor = asExecutable(binding.bindingElement().get());
     ExecutableType constructorType =
-        asExecutable(types.asMemberOf(asDeclared(binding.key().type()), constructor));
+        asExecutable(types.asMemberOf(asDeclared(binding.key().type().java()), constructor));
     return assistedParameterSpecs(constructor.getParameters(), constructorType.getParameterTypes());
   }
 
@@ -129,7 +130,8 @@ public final class AssistedInjectionAnnotations {
     AssistedFactoryMetadata metadata =
         AssistedFactoryMetadata.create(binding.bindingElement().get().asType(), elements, types);
     ExecutableType factoryMethodType =
-        asExecutable(types.asMemberOf(asDeclared(binding.key().type()), metadata.factoryMethod()));
+        asExecutable(
+            types.asMemberOf(asDeclared(binding.key().type().java()), metadata.factoryMethod()));
     return assistedParameterSpecs(
         // Use the order of the parameters from the @AssistedFactory method but use the parameter
         // names of the @AssistedInject constructor.
@@ -170,7 +172,7 @@ public final class AssistedInjectionAnnotations {
         TypeMirror factory, DaggerElements elements, DaggerTypes types) {
       DeclaredType factoryType = asDeclared(factory);
       TypeElement factoryElement = asTypeElement(factoryType);
-      ExecutableElement factoryMethod = assistedFactoryMethod(factoryElement, elements, types);
+      ExecutableElement factoryMethod = assistedFactoryMethod(factoryElement, elements);
       ExecutableType factoryMethodType = asExecutable(types.asMemberOf(factoryType, factoryMethod));
       DeclaredType assistedInjectType = asDeclared(factoryMethodType.getReturnType());
       return new AutoValue_AssistedInjectionAnnotations_AssistedFactoryMetadata(
@@ -231,7 +233,7 @@ public final class AssistedInjectionAnnotations {
     public static AssistedParameter create(VariableElement parameter, TypeMirror parameterType) {
       AssistedParameter assistedParameter =
           new AutoValue_AssistedInjectionAnnotations_AssistedParameter(
-              getAnnotationMirror(parameter, Assisted.class)
+              getAnnotationMirror(parameter, TypeNames.ASSISTED)
                   .map(assisted -> getStringValue(assisted, "value"))
                   .orElse(""),
               MoreTypes.equivalence().wrap(parameterType));

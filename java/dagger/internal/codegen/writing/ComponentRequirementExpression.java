@@ -23,7 +23,7 @@ import dagger.internal.codegen.binding.ComponentRequirement;
 /**
  * A factory for expressions of {@link ComponentRequirement}s in the generated component. This is
  * <em>not</em> a {@link BindingExpression}, since {@link ComponentRequirement}s do not have a
- * {@link dagger.model.Key}. See {@link ComponentRequirementBindingExpression} for binding
+ * {@link dagger.spi.model.Key}. See {@link ComponentRequirementBindingExpression} for binding
  * expressions that are themselves a component requirement.
  */
 interface ComponentRequirementExpression {

@@ -39,6 +39,7 @@ import dagger.internal.codegen.base.SetType;
 import dagger.internal.codegen.binding.BindingType;
 import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.javapoet.CodeBlocks;
+import dagger.internal.codegen.writing.ComponentImplementation.ShardImplementation;
 import java.util.List;
 import java.util.Optional;
 import javax.lang.model.type.DeclaredType;
@@ -51,20 +52,22 @@ abstract class MemberSelect {
 
   /**
    * Returns a {@link MemberSelect} that accesses the field given by {@code fieldName} owned by
-   * {@code owningClass}.  In this context "local" refers to the fact that the field is owned by the
-   * type (or an enclosing type) from which the code block will be used.  The returned
-   * {@link MemberSelect} will not be valid for accessing the field from a different class
-   * (regardless of accessibility).
+   * {@code owningClass}. In this context "local" refers to the fact that the field is owned by the
+   * type (or an enclosing type) from which the code block will be used. The returned {@link
+   * MemberSelect} will not be valid for accessing the field from a different class (regardless of
+   * accessibility).
    */
-  static MemberSelect localField(ClassName owningClass, String fieldName) {
-    return new LocalField(owningClass, fieldName);
+  static MemberSelect localField(ShardImplementation owningShard, String fieldName) {
+    return new LocalField(owningShard, fieldName);
   }
 
   private static final class LocalField extends MemberSelect {
+    final ShardImplementation owningShard;
     final String fieldName;
 
-    LocalField(ClassName owningClass, String fieldName) {
-      super(owningClass, false);
+    LocalField(ShardImplementation owningShard, String fieldName) {
+      super(owningShard.name(), false);
+      this.owningShard = owningShard;
       this.fieldName = checkNotNull(fieldName);
     }
 
@@ -72,34 +75,7 @@ abstract class MemberSelect {
     CodeBlock getExpressionFor(ClassName usingClass) {
       return owningClass().equals(usingClass)
           ? CodeBlock.of("$N", fieldName)
-          : CodeBlock.of("$T.this.$N", owningClass(), fieldName);
-    }
-  }
-
-  /**
-   * Returns a {@link MemberSelect} that accesses the method given by {@code methodName} owned by
-   * {@code owningClass}. In this context "local" refers to the fact that the method is owned by the
-   * type (or an enclosing type) from which the code block will be used. The returned {@link
-   * MemberSelect} will not be valid for accessing the method from a different class (regardless of
-   * accessibility).
-   */
-  static MemberSelect localMethod(ClassName owningClass, String methodName) {
-    return new LocalMethod(owningClass, methodName);
-  }
-
-  private static final class LocalMethod extends MemberSelect {
-    final String methodName;
-
-    LocalMethod(ClassName owningClass, String methodName) {
-      super(owningClass, false);
-      this.methodName = checkNotNull(methodName);
-    }
-
-    @Override
-    CodeBlock getExpressionFor(ClassName usingClass) {
-      return owningClass().equals(usingClass)
-          ? CodeBlock.of("$N()", methodName)
-          : CodeBlock.of("$T.this.$N()", owningClass(), methodName);
+          : CodeBlock.of("$L.$N", owningShard.shardFieldReference(), fieldName);
     }
   }
 
@@ -121,7 +97,7 @@ abstract class MemberSelect {
 
         case INJECTION:
         case PROVISION:
-          TypeMirror keyType = contributionBinding.key().type();
+          TypeMirror keyType = contributionBinding.key().type().java();
           if (keyType.getKind().equals(DECLARED)) {
             ImmutableList<TypeVariableName> typeVariables =
                 bindingTypeElementTypeVariableNames(contributionBinding);
@@ -176,7 +152,7 @@ abstract class MemberSelect {
     BindingType bindingType = contributionBinding.bindingType();
     ImmutableList<TypeMirror> typeParameters =
         ImmutableList.copyOf(
-            MoreTypes.asDeclared(contributionBinding.key().type()).getTypeArguments());
+            MoreTypes.asDeclared(contributionBinding.key().type().java()).getTypeArguments());
     if (bindingType.equals(BindingType.PRODUCTION)) {
       return new ParameterizedStaticMethod(
           PRODUCERS, typeParameters, CodeBlock.of("emptyMapProducer()"), PRODUCER);

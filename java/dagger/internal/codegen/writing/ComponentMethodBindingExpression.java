@@ -18,12 +18,11 @@ package dagger.internal.codegen.writing;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
-import dagger.internal.codegen.binding.BindingRequest;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.ComponentDescriptor.ComponentMethodDescriptor;
-import dagger.internal.codegen.binding.ContributionBinding;
-import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.langmodel.DaggerTypes;
 import javax.lang.model.type.TypeMirror;
 
@@ -33,60 +32,57 @@ import javax.lang.model.type.TypeMirror;
  * <p>Dependents of this binding expression will just call the component method.
  */
 final class ComponentMethodBindingExpression extends MethodBindingExpression {
+  private final BindingExpression wrappedBindingExpression;
   private final ComponentImplementation componentImplementation;
   private final ComponentMethodDescriptor componentMethod;
+  private final DaggerTypes types;
 
+  @AssistedInject
   ComponentMethodBindingExpression(
-      BindingRequest request,
-      ContributionBinding binding,
-      MethodImplementationStrategy methodImplementationStrategy,
-      BindingExpression wrappedBindingExpression,
+      @Assisted BindingExpression wrappedBindingExpression,
+      @Assisted ComponentMethodDescriptor componentMethod,
       ComponentImplementation componentImplementation,
-      ComponentMethodDescriptor componentMethod,
       DaggerTypes types) {
-    super(
-        request,
-        binding,
-        methodImplementationStrategy,
-        wrappedBindingExpression,
-        componentImplementation,
-        types);
-    this.componentImplementation = checkNotNull(componentImplementation);
+    super(componentImplementation.getComponentShard(), types);
+    this.wrappedBindingExpression = checkNotNull(wrappedBindingExpression);
     this.componentMethod = checkNotNull(componentMethod);
+    this.componentImplementation = componentImplementation;
+    this.types = types;
   }
 
   @Override
   protected CodeBlock getComponentMethodImplementation(
       ComponentMethodDescriptor componentMethod, ComponentImplementation component) {
     // There could be several methods on the component for the same request key and kind.
-    // Only one should use the BindingMethodImplementation; the others can delegate that one. So
-    // use methodImplementation.body() only if componentMethod equals the method for this instance.
-
+    // Only one should use the BindingMethodImplementation; the others can delegate that one.
     // Separately, the method might be defined on a supertype that is also a supertype of some
     // parent component. In that case, the same ComponentMethodDescriptor will be used to add a CMBE
     // for the parent and the child. Only the parent's should use the BindingMethodImplementation;
     // the child's can delegate to the parent. So use methodImplementation.body() only if
     // componentName equals the component for this instance.
     return componentMethod.equals(this.componentMethod) && component.equals(componentImplementation)
-        ? methodBodyForComponentMethod(componentMethod)
+        ? CodeBlock.of(
+            "return $L;",
+            wrappedBindingExpression
+                .getDependencyExpressionForComponentMethod(componentMethod, componentImplementation)
+                .codeBlock())
         : super.getComponentMethodImplementation(componentMethod, component);
   }
 
   @Override
-  Expression getDependencyExpression(ClassName requestingClass) {
-    // If a component method returns a primitive, update the expression's type which might be boxed.
-    Expression expression = super.getDependencyExpression(requestingClass);
-    TypeMirror methodReturnType = componentMethod.methodElement().getReturnType();
-    return methodReturnType.getKind().isPrimitive()
-        ? Expression.create(methodReturnType, expression.codeBlock())
-        : expression;
+  protected CodeBlock methodCall() {
+    return CodeBlock.of("$N()", componentMethod.methodElement().getSimpleName());
   }
 
   @Override
-  protected void addMethod() {}
+  protected TypeMirror returnType() {
+    return componentMethod.resolvedReturnType(types);
+  }
 
-  @Override
-  protected String methodName() {
-    return componentMethod.methodElement().getSimpleName().toString();
+  @AssistedFactory
+  static interface Factory {
+    ComponentMethodBindingExpression create(
+        BindingExpression wrappedBindingExpression,
+        ComponentMethodDescriptor componentMethod);
   }
 }

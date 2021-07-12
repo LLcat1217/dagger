@@ -22,13 +22,14 @@ import com.squareup.javapoet.CodeBlock;
 import dagger.internal.codegen.binding.BindingRequest;
 import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.javapoet.CodeBlocks;
+import dagger.internal.codegen.writing.ComponentImplementation.ShardImplementation;
 import dagger.internal.codegen.writing.FrameworkFieldInitializer.FrameworkInstanceCreationExpression;
-import dagger.model.DependencyRequest;
+import dagger.spi.model.DependencyRequest;
 
 /** An abstract factory creation expression for multibindings. */
 abstract class MultibindingFactoryCreationExpression
     implements FrameworkInstanceCreationExpression {
-  private final ComponentImplementation componentImplementation;
+  private final ShardImplementation shardImplementation;
   private final ComponentBindingExpressions componentBindingExpressions;
   private final ContributionBinding binding;
 
@@ -37,7 +38,7 @@ abstract class MultibindingFactoryCreationExpression
       ComponentImplementation componentImplementation,
       ComponentBindingExpressions componentBindingExpressions) {
     this.binding = checkNotNull(binding);
-    this.componentImplementation = checkNotNull(componentImplementation);
+    this.shardImplementation = checkNotNull(componentImplementation).shardImplementation(binding);
     this.componentBindingExpressions = checkNotNull(componentBindingExpressions);
   }
 
@@ -47,7 +48,7 @@ abstract class MultibindingFactoryCreationExpression
         componentBindingExpressions
             .getDependencyExpression(
                 BindingRequest.bindingRequest(dependency.key(), binding.frameworkType()),
-                componentImplementation.name())
+                shardImplementation.name())
             .codeBlock();
 
     return useRawType()
@@ -65,11 +66,11 @@ abstract class MultibindingFactoryCreationExpression
    * component, and therefore a raw type must be used.
    */
   protected final boolean useRawType() {
-    return !componentImplementation.isTypeAccessible(binding.key().type());
+    return !shardImplementation.isTypeAccessible(binding.key().type().java());
   }
 
   @Override
-  public final boolean useInnerSwitchingProvider() {
+  public final boolean useSwitchingProvider() {
     return !binding.dependencies().isEmpty();
   }
 }

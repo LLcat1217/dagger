@@ -22,6 +22,9 @@ import static javax.lang.model.type.TypeKind.VOID;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.ParameterSpec;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.ComponentDescriptor.ComponentMethodDescriptor;
 import dagger.internal.codegen.binding.MembersInjectionBinding;
 import dagger.internal.codegen.javapoet.Expression;
@@ -35,8 +38,9 @@ final class MembersInjectionBindingExpression extends BindingExpression {
   private final MembersInjectionBinding binding;
   private final MembersInjectionMethods membersInjectionMethods;
 
+  @AssistedInject
   MembersInjectionBindingExpression(
-      MembersInjectionBinding binding, MembersInjectionMethods membersInjectionMethods) {
+      @Assisted MembersInjectionBinding binding, MembersInjectionMethods membersInjectionMethods) {
     this.binding = binding;
     this.membersInjectionMethods = membersInjectionMethods;
   }
@@ -60,13 +64,21 @@ final class MembersInjectionBindingExpression extends BindingExpression {
           ? CodeBlock.of("")
           : CodeBlock.of("return $N;", parameter);
     } else {
+      ClassName requestingClass = component.name();
       return methodElement.getReturnType().getKind().equals(VOID)
-          ? CodeBlock.of("$L;", membersInjectionInvocation(parameter))
-          : CodeBlock.of("return $L;", membersInjectionInvocation(parameter));
+          ? CodeBlock.of("$L;", membersInjectionInvocation(parameter, requestingClass).codeBlock())
+          : CodeBlock.of(
+              "return $L;", membersInjectionInvocation(parameter, requestingClass).codeBlock());
     }
   }
 
-  CodeBlock membersInjectionInvocation(ParameterSpec target) {
-    return CodeBlock.of("$N($N)", membersInjectionMethods.getOrCreate(binding.key()), target);
+  private Expression membersInjectionInvocation(ParameterSpec target, ClassName requestingClass) {
+    return membersInjectionMethods.getInjectExpression(
+        binding.key(), CodeBlock.of("$N", target), requestingClass);
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    MembersInjectionBindingExpression create(MembersInjectionBinding binding);
   }
 }

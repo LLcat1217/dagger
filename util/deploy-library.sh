@@ -9,14 +9,17 @@ set -eu
 # parameter, if provided then javadoc must also be provided.
 # @param {string} javadoc the java doc jar of the library. This is an optional
 # parameter, if provided then srcjar must also be provided.
+# @param {string} module_name the JPMS module name to include in the jar. This
+# is an optional parameter and can only be used with jar files.
 deploy_library() {
   local library=$1
   local pomfile=$2
   local srcjar=$3
   local javadoc=$4
-  local mvn_goal=$5
-  local version_name=$6
-  shift 6
+  local module_name=$5
+  local mvn_goal=$6
+  local version_name=$7
+  shift 7
   local extra_maven_args=("$@")
 
   bazel build --define=pom_version="$version_name" \
@@ -28,6 +31,12 @@ deploy_library() {
     $(bazel_output_file $library) \
     $(bazel_output_file $pomfile) \
     $version_name
+
+  # TODO(bcorso): Consider moving this into the "gen_maven_artifact" macro once
+  # all our targets are using gen_maven_artifact
+  add_automatic_module_name_manifest_entry \
+    $(bazel_output_file $library) \
+    "${module_name}"
 
   if [ -n "$srcjar" ] && [ -n "$javadoc" ] ; then
     bazel build --define=pom_version="$version_name" \
@@ -78,6 +87,22 @@ add_tracking_version() {
   else
     echo "Could not add tracking version file to $library"
     exit 1
+  fi
+}
+
+add_automatic_module_name_manifest_entry() {
+  local library=$1
+  local module_name=$2
+  if [ -n "$module_name" ] ; then
+    if [[ $library =~ \.jar$ ]]; then
+      local temp_dir=$(mktemp -d)
+      echo "Automatic-Module-Name: ${module_name}" > $temp_dir/module_name_file
+      # The "m" flag is specifically for adding manifest entries.
+      jar ufm $library $temp_dir/module_name_file
+    else
+      echo "Could not add module name to $library"
+      exit 1
+    fi
   fi
 }
 

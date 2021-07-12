@@ -19,7 +19,7 @@ package dagger.internal.codegen.bindinggraphvalidation;
 import static dagger.internal.codegen.base.Formatter.INDENT;
 import static dagger.internal.codegen.base.Scopes.getReadableSource;
 import static dagger.internal.codegen.langmodel.DaggerElements.closestEnclosingTypeElement;
-import static dagger.model.BindingKind.INJECTION;
+import static dagger.spi.model.BindingKind.INJECTION;
 import static java.util.stream.Collectors.joining;
 import static javax.tools.Diagnostic.Kind.ERROR;
 
@@ -29,11 +29,11 @@ import com.google.common.collect.Multimaps;
 import dagger.internal.codegen.base.Scopes;
 import dagger.internal.codegen.binding.MethodSignatureFormatter;
 import dagger.internal.codegen.compileroption.CompilerOptions;
-import dagger.model.Binding;
-import dagger.model.BindingGraph;
-import dagger.model.BindingGraph.ComponentNode;
-import dagger.spi.BindingGraphPlugin;
-import dagger.spi.DiagnosticReporter;
+import dagger.spi.model.Binding;
+import dagger.spi.model.BindingGraph;
+import dagger.spi.model.BindingGraph.ComponentNode;
+import dagger.spi.model.BindingGraphPlugin;
+import dagger.spi.model.DiagnosticReporter;
 import java.util.Optional;
 import java.util.Set;
 import javax.inject.Inject;
@@ -62,9 +62,9 @@ final class IncompatiblyScopedBindingsValidator implements BindingGraphPlugin {
 
   @Override
   public void visitGraph(BindingGraph bindingGraph, DiagnosticReporter diagnosticReporter) {
-    ImmutableSetMultimap.Builder<ComponentNode, dagger.model.Binding> incompatibleBindings =
+    ImmutableSetMultimap.Builder<ComponentNode, dagger.spi.model.Binding> incompatibleBindings =
         ImmutableSetMultimap.builder();
-    for (dagger.model.Binding binding : bindingGraph.bindings()) {
+    for (dagger.spi.model.Binding binding : bindingGraph.bindings()) {
       binding
           .scope()
           .filter(scope -> !scope.isReusable())

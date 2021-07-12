@@ -18,11 +18,15 @@ package dagger.internal.codegen.writing;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static dagger.internal.codegen.binding.SourceFiles.generatedClassNameForBinding;
-import static dagger.model.BindingKind.INJECTION;
+import static dagger.spi.model.BindingKind.INJECTION;
 
 import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.javapoet.CodeBlocks;
+import dagger.internal.codegen.writing.ComponentImplementation.ShardImplementation;
 import dagger.internal.codegen.writing.FrameworkFieldInitializer.FrameworkInstanceCreationExpression;
 import javax.inject.Provider;
 
@@ -35,12 +39,17 @@ final class InjectionOrProvisionProviderCreationExpression
     implements FrameworkInstanceCreationExpression {
 
   private final ContributionBinding binding;
+  private final ShardImplementation shardImplementation;
   private final ComponentBindingExpressions componentBindingExpressions;
 
+  @AssistedInject
   InjectionOrProvisionProviderCreationExpression(
-      ContributionBinding binding, ComponentBindingExpressions componentBindingExpressions) {
+      @Assisted ContributionBinding binding,
+      ComponentImplementation componentImplementation,
+      ComponentBindingExpressions componentBindingExpressions) {
     this.binding = checkNotNull(binding);
-    this.componentBindingExpressions = checkNotNull(componentBindingExpressions);
+    this.shardImplementation = componentImplementation.shardImplementation(binding);
+    this.componentBindingExpressions = componentBindingExpressions;
   }
 
   @Override
@@ -49,7 +58,8 @@ final class InjectionOrProvisionProviderCreationExpression
         CodeBlock.of(
             "$T.create($L)",
             generatedClassNameForBinding(binding),
-            componentBindingExpressions.getCreateMethodArgumentsCodeBlock(binding));
+            componentBindingExpressions.getCreateMethodArgumentsCodeBlock(
+                binding, shardImplementation.name()));
 
     // When scoping a parameterized factory for an @Inject class, Java 7 cannot always infer the
     // type properly, so cast to a raw framework type before scoping.
@@ -60,5 +70,10 @@ final class InjectionOrProvisionProviderCreationExpression
     } else {
       return createFactory;
     }
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    InjectionOrProvisionProviderCreationExpression create(ContributionBinding binding);
   }
 }

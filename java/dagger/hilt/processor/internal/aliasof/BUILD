@@ -31,12 +31,12 @@ java_library(
         "AliasOfPropagatedDataGenerator.java",
     ],
     deps = [
-        ":alias_ofs",
         "//java/dagger/hilt/processor/internal:base_processor",
         "//java/dagger/hilt/processor/internal:classnames",
         "//java/dagger/hilt/processor/internal:processor_errors",
         "//java/dagger/hilt/processor/internal:processors",
         "//java/dagger/internal/guava:collect",
+        "@google_bazel_common//third_party/java/auto:common",
         "@google_bazel_common//third_party/java/auto:service",
         "@google_bazel_common//third_party/java/incap",
         "@google_bazel_common//third_party/java/javapoet",
@@ -46,14 +46,19 @@ java_library(
 java_library(
     name = "alias_ofs",
     srcs = [
+        "AliasOfPropagatedDataMetadata.java",
         "AliasOfs.java",
     ],
     deps = [
+        "//java/dagger/hilt/processor/internal:aggregated_elements",
         "//java/dagger/hilt/processor/internal:classnames",
+        "//java/dagger/hilt/processor/internal:component_descriptor",
         "//java/dagger/hilt/processor/internal:processor_errors",
         "//java/dagger/hilt/processor/internal:processors",
-        "//java/dagger/internal/guava:base",
+        "//java/dagger/hilt/processor/internal/root/ir",
+        "//java/dagger/internal/codegen/extension",
         "//java/dagger/internal/guava:collect",
+        "@google_bazel_common//third_party/java/auto:value",
         "@google_bazel_common//third_party/java/javapoet",
     ],
 )

@@ -20,7 +20,6 @@ import static com.google.testing.compile.CompilationSubject.assertThat;
 import static dagger.internal.codegen.CompilerMode.DEFAULT_MODE;
 import static dagger.internal.codegen.CompilerMode.FAST_INIT_MODE;
 import static dagger.internal.codegen.Compilers.compilerWithOptions;
-import static dagger.internal.codegen.GeneratedLines.GENERATED_CODE_ANNOTATIONS;
 
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.CompilationSubject;
@@ -144,36 +143,24 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
+                    GeneratedLines.generatedAnnotations(),
                     "final class DaggerTestComponent implements TestComponent {")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile Object regularScoped = new MemoizedSentinel();",
-                    "  private volatile ReusableScoped reusableScoped;",
-                    "",
-                    "  private RegularScoped regularScoped() {",
-                    "    Object local = regularScoped;",
-                    "    if (local instanceof MemoizedSentinel) {",
-                    "      synchronized (local) {",
-                    "        local = regularScoped;",
-                    "        if (local instanceof MemoizedSentinel) {",
-                    "          local = new RegularScoped();",
-                    "          regularScoped = DoubleCheck.reentrantCheck(regularScoped, local);",
-                    "        }",
-                    "      }",
-                    "    }",
-                    "    return (RegularScoped) local;",
-                    "  }",
-                    "",
-                    "  private ReusableScoped reusableScoped() {",
-                    "    Object local = reusableScoped;",
-                    "    if (local == null) {",
-                    "      local = new ReusableScoped();",
-                    "      reusableScoped = (ReusableScoped) local;",
-                    "    }",
-                    "    return (ReusableScoped) local;",
-                    "  }",
-                    "")
+                    "  @SuppressWarnings(\"unchecked\")",
+                    "  private void initialize() {",
+                    "    this.regularScopedProvider =",
+                    "        DoubleCheck.provider(",
+                    "            new SwitchingProvider<RegularScoped>(testComponent, 0));",
+                    "    this.reusableScopedProvider =",
+                    "        SingleCheck.provider(",
+                    "            new SwitchingProvider<ReusableScoped>(testComponent, 1));",
+                    "    this.reusableProvider =",
+                    "        DoubleCheck.provider((Provider) reusableScopedProvider);",
+                    "    this.unscopedProvider = new SwitchingProvider<>(testComponent, 2);",
+                    "    this.unscopedProvider2 =",
+                    "        DoubleCheck.provider((Provider) unscopedProvider);",
+                    "  }")
                 .addLinesIn(
                     DEFAULT_MODE,
                     "  @SuppressWarnings(\"unchecked\")",
@@ -187,8 +174,20 @@ public class DelegateBindingExpressionTest {
                     "    this.unscopedProvider = DoubleCheck.provider(",
                     "        (Provider) Unscoped_Factory.create());",
                     "  }")
-                .addLines( //
-                    "}")
+                .addLinesIn(
+                    FAST_INIT_MODE,
+                    "  private static final class SwitchingProvider<T> implements Provider<T> {",
+                    "    @SuppressWarnings(\"unchecked\")",
+                    "    @Override",
+                    "    public T get() {",
+                    "      switch (id) {",
+                    "        case 0: return (T) new RegularScoped();",
+                    "        case 1: return (T) new ReusableScoped();",
+                    "        case 2: return (T) new Unscoped();",
+                    "        default: throw new AssertionError(id);",
+                    "      }",
+                    "    }",
+                    "  }")
                 .build());
   }
 
@@ -223,36 +222,22 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
+                    GeneratedLines.generatedAnnotations(),
                     "final class DaggerTestComponent implements TestComponent {")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile Object regularScoped = new MemoizedSentinel();",
-                    "  private volatile ReusableScoped reusableScoped;",
-                    "",
-                    "  private RegularScoped regularScoped() {",
-                    "    Object local = regularScoped;",
-                    "    if (local instanceof MemoizedSentinel) {",
-                    "      synchronized (local) {",
-                    "        local = regularScoped;",
-                    "        if (local instanceof MemoizedSentinel) {",
-                    "          local = new RegularScoped();",
-                    "          regularScoped = DoubleCheck.reentrantCheck(regularScoped, local);",
-                    "        }",
-                    "      }",
-                    "    }",
-                    "    return (RegularScoped) local;",
-                    "  }",
-                    "",
-                    "  private ReusableScoped reusableScoped() {",
-                    "    Object local = reusableScoped;",
-                    "    if (local == null) {",
-                    "      local = new ReusableScoped();",
-                    "      reusableScoped = (ReusableScoped) local;",
-                    "    }",
-                    "    return (ReusableScoped) local;",
-                    "  }",
-                    "")
+                    "  @SuppressWarnings(\"unchecked\")",
+                    "  private void initialize() {",
+                    "    this.regularScopedProvider =",
+                    "        DoubleCheck.provider(",
+                    "            new SwitchingProvider<RegularScoped>(testComponent, 0));",
+                    "    this.reusableScopedProvider =",
+                    "        SingleCheck.provider(",
+                    "            new SwitchingProvider<ReusableScoped>(testComponent, 1));",
+                    "    this.unscopedProvider = new SwitchingProvider<>(testComponent, 2);",
+                    "    this.unscopedProvider2 =",
+                    "        SingleCheck.provider((Provider) unscopedProvider);",
+                    "  }")
                 .addLinesIn(
                     DEFAULT_MODE,
                     "  @SuppressWarnings(\"unchecked\")",
@@ -264,8 +249,6 @@ public class DelegateBindingExpressionTest {
                     "    this.unscopedProvider = SingleCheck.provider(",
                     "        (Provider) Unscoped_Factory.create());",
                     "  }")
-                .addLines( //
-                    "}")
                 .build());
   }
 
@@ -299,36 +282,10 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
-                    "final class DaggerTestComponent implements TestComponent {")
-                .addLinesIn(
-                    FAST_INIT_MODE,
-                    "  private volatile Object regularScoped = new MemoizedSentinel();",
-                    "  private volatile ReusableScoped reusableScoped;",
-                    "",
-                    "  private RegularScoped regularScoped() {",
-                    "    Object local = regularScoped;",
-                    "    if (local instanceof MemoizedSentinel) {",
-                    "      synchronized (local) {",
-                    "        local = regularScoped;",
-                    "        if (local instanceof MemoizedSentinel) {",
-                    "          local = new RegularScoped();",
-                    "          regularScoped = DoubleCheck.reentrantCheck(regularScoped, local);",
-                    "        }",
-                    "      }",
-                    "    }",
-                    "    return (RegularScoped) local;",
-                    "  }",
-                    "",
-                    "  private ReusableScoped reusableScoped() {",
-                    "    Object local = reusableScoped;",
-                    "    if (local == null) {",
-                    "      local = new ReusableScoped();",
-                    "      reusableScoped = (ReusableScoped) local;",
-                    "    }",
-                    "    return (ReusableScoped) local;",
-                    "  }",
-                    "")
+                    GeneratedLines.generatedAnnotations(),
+                    "final class DaggerTestComponent implements TestComponent {",
+                    "  private Provider<RegularScoped> regularScopedProvider;",
+                    "  private Provider<ReusableScoped> reusableScopedProvider;")
                 .addLinesIn(
                     DEFAULT_MODE,
                     "  @SuppressWarnings(\"unchecked\")",
@@ -338,8 +295,17 @@ public class DelegateBindingExpressionTest {
                     "    this.reusableScopedProvider = ",
                     "        SingleCheck.provider(ReusableScoped_Factory.create());",
                     "  }")
-                .addLines( //
-                    "}")
+                .addLinesIn(
+                    FAST_INIT_MODE,
+                    "  @SuppressWarnings(\"unchecked\")",
+                    "  private void initialize() {",
+                    "  this.regularScopedProvider =",
+                    "      DoubleCheck.provider(",
+                    "          new SwitchingProvider<RegularScoped>(testComponent, 0));",
+                    "  this.reusableScopedProvider =",
+                    "      SingleCheck.provider(",
+                    "          new SwitchingProvider<ReusableScoped>(testComponent, 1));",
+                    "  }")
                 .build());
   }
 
@@ -401,44 +367,30 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
-                    "final class DaggerTestComponent implements TestComponent {")
+                    GeneratedLines.generatedAnnotations(),
+                    "final class DaggerTestComponent implements TestComponent {",
+                    "  @SuppressWarnings(\"rawtypes\")",
+                    "  private Provider subtypeProvider;")
                 .addLinesIn(
                     DEFAULT_MODE,
-                    "  @SuppressWarnings(\"rawtypes\")",
-                    "  private Provider subtypeProvider;",
-                    "",
                     "  @SuppressWarnings(\"unchecked\")",
                     "  private void initialize() {",
                     "    this.subtypeProvider = DoubleCheck.provider(Subtype_Factory.create());",
-                    "  }",
-                    "",
-                    "  @Override",
-                    "  public Supertype supertype() {",
-                    "    return (Supertype) subtypeProvider.get();",
                     "  }")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile Object subtype = new MemoizedSentinel();",
-                    "",
-                    "  private Object subtype() {",
-                    "    Object local = subtype;",
-                    "    if (local instanceof MemoizedSentinel) {",
-                    "      synchronized (local) {",
-                    "        local = subtype;",
-                    "        if (local instanceof MemoizedSentinel) {",
-                    "          local = Subtype_Factory.newInstance();",
-                    "          subtype = DoubleCheck.reentrantCheck(subtype, local);",
-                    "        }",
-                    "      }",
-                    "    }",
-                    "    return (Object) local;",
-                    "  }",
-                    "",
+                    "  @SuppressWarnings(\"unchecked\")",
+                    "  private void initialize() {",
+                    "    this.subtypeProvider =",
+                    "        DoubleCheck.provider(",
+                    "            new SwitchingProvider<Object>(testComponent, 0));",
+                    "  }")
+                .addLines(
                     "  @Override",
                     "  public Supertype supertype() {",
-                    "    return (Supertype) subtype();",
-                    "  }")
+                    "    return (Supertype) subtypeProvider.get();",
+                    "  }",
+                    "}")
                 .build());
   }
 
@@ -509,10 +461,8 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
-                    "final class DaggerTestComponent implements TestComponent {")
-                .addLinesIn(
-                    DEFAULT_MODE,
+                    GeneratedLines.generatedAnnotations(),
+                    "final class DaggerTestComponent implements TestComponent {",
                     "  @SuppressWarnings(\"rawtypes\")",
                     "  private Provider subtypeProvider;",
                     "",
@@ -522,28 +472,6 @@ public class DelegateBindingExpressionTest {
                     "    return UsesSupertype_Factory.newInstance(subtypeProvider.get());",
                     "  }",
                     "}")
-                .addLinesIn(
-                    FAST_INIT_MODE,
-                    "  private volatile Object subtype = new MemoizedSentinel();",
-                    "",
-                    "  private Object subtype() {",
-                    "    Object local = subtype;",
-                    "    if (local instanceof MemoizedSentinel) {",
-                    "      synchronized (local) {",
-                    "        local = subtype;",
-                    "        if (local instanceof MemoizedSentinel) {",
-                    "          local = Subtype_Factory.newInstance();",
-                    "          subtype = DoubleCheck.reentrantCheck(subtype, local);",
-                    "        }",
-                    "      }",
-                    "    }",
-                    "    return (Object) local;",
-                    "  }",
-                    "",
-                    "  @Override",
-                    "  public UsesSupertype usesSupertype() {",
-                    "    return UsesSupertype_Factory.newInstance(subtype());",
-                    "  }")
                 .build());
   }
 
@@ -599,7 +527,7 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
+                    GeneratedLines.generatedAnnotations(),
                     "final class DaggerTestComponent implements TestComponent {")
                 .addLinesIn(
                     DEFAULT_MODE,
@@ -615,36 +543,25 @@ public class DelegateBindingExpressionTest {
                     "}")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile Provider<String> provideStringProvider;",
-                    "",
-                    "  private Provider<String> stringProvider() {",
-                    "    Object local = provideStringProvider;",
-                    "    if (local == null) {",
-                    "      local = new SwitchingProvider<>(0);",
-                    "      provideStringProvider = (Provider<String>) local;",
-                    "    }",
-                    "    return (Provider<String>) local;",
-                    "  }",
+                    "  private Provider<String> provideStringProvider;",
                     "",
                     "  @Override",
                     "  public Provider<CharSequence> charSequence() {",
-                    "    return (Provider) stringProvider();",
+                    "    return (Provider) provideStringProvider;",
                     "  }",
                     "",
                     "  @Override",
                     "  public Provider<String> namedString() {",
-                    "    return stringProvider();",
+                    "    return provideStringProvider;",
                     "  }",
                     "",
-                    "  private final class SwitchingProvider<T> implements Provider<T> {",
+                    "  private static final class SwitchingProvider<T> implements Provider<T> {",
                     "    @SuppressWarnings(\"unchecked\")",
                     "    @Override",
                     "    public T get() {",
                     "      switch (id) {",
-                    "        case 0:",
-                    "            return (T) TestModule_ProvideStringFactory.provideString();",
-                    "        default:",
-                    "            throw new AssertionError(id);",
+                    "        case 0: return (T) TestModule_ProvideStringFactory.provideString();",
+                    "        default: throw new AssertionError(id);",
                     "      }",
                     "    }",
                     "  }")
@@ -700,7 +617,7 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
+                    GeneratedLines.generatedAnnotations(),
                     "final class DaggerTestComponent implements TestComponent {")
                 .addLinesIn(
                     DEFAULT_MODE,
@@ -715,36 +632,30 @@ public class DelegateBindingExpressionTest {
                     "}")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile Provider<String> provideStringProvider;",
+                    "  private Provider<String> provideStringProvider;",
                     "",
-                    "  private Provider<String> stringProvider() {",
-                    "    Object local = provideStringProvider;",
-                    "    if (local == null) {",
-                    "      local = new SwitchingProvider<>(0);",
-                    "      provideStringProvider = (Provider<String>) local;",
-                    "    }",
-                    "    return (Provider<String>) local;",
+                    "  @SuppressWarnings(\"unchecked\")",
+                    "  private void initialize() {",
+                    "    this.provideStringProvider = new SwitchingProvider<>(testComponent, 0);",
                     "  }",
                     "",
                     "  @Override",
                     "  public Provider<CharSequence> charSequence() {",
-                    "    return (Provider) stringProvider();",
+                    "    return (Provider) provideStringProvider;",
                     "  }",
                     "",
                     "  @Override",
                     "  public Provider<Object> object() {",
-                    "    return (Provider) stringProvider();",
+                    "    return (Provider) provideStringProvider;",
                     "  }",
                     "",
-                    "  private final class SwitchingProvider<T> implements Provider<T> {",
+                    "  private static final class SwitchingProvider<T> implements Provider<T> {",
                     "    @SuppressWarnings(\"unchecked\")",
                     "    @Override",
                     "    public T get() {",
                     "      switch (id) {",
-                    "        case 0:",
-                    "            return (T) TestModule_ProvideStringFactory.provideString();",
-                    "        default:",
-                    "            throw new AssertionError(id);",
+                    "        case 0: return (T) TestModule_ProvideStringFactory.provideString();",
+                    "        default: throw new AssertionError(id);",
                     "      }",
                     "    }",
                     "  }")
@@ -805,7 +716,7 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
+                    GeneratedLines.generatedAnnotations(),
                     "final class DaggerRequestsSubtypeAsProvider",
                     "    implements RequestsSubtypeAsProvider {")
                 .addLinesIn(
@@ -817,23 +728,15 @@ public class DelegateBindingExpressionTest {
                     "}")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile Provider subtypeProvider;",
-                    "",
-                    "  private Provider subtypeProvider() {",
-                    "    Object local = subtypeProvider;",
-                    "    if (local == null) {",
-                    "      local = new SwitchingProvider<>(0);",
-                    "      subtypeProvider = (Provider) local;",
-                    "    }",
-                    "    return (Provider) local;",
-                    "  }",
+                    "  @SuppressWarnings(\"rawtypes\")",
+                    "  private Provider subtypeProvider;",
                     "",
                     "  @Override",
                     "  public Provider<Supertype> supertypeProvider() {",
-                    "    return subtypeProvider();",
+                    "    return subtypeProvider;",
                     "  }",
                     "",
-                    "  private final class SwitchingProvider<T> implements Provider<T> {",
+                    "  private static final class SwitchingProvider<T> implements Provider<T> {",
                     "    @SuppressWarnings(\"unchecked\")",
                     "    @Override",
                     "    public T get() {",
@@ -897,71 +800,42 @@ public class DelegateBindingExpressionTest {
                 .addLines(
                     "package test;",
                     "",
-                    GENERATED_CODE_ANNOTATIONS,
-                    "final class DaggerTestComponent implements TestComponent {")
+                    GeneratedLines.generatedAnnotations(),
+                    "final class DaggerTestComponent implements TestComponent {",
+                    "  private Provider<String> provideStringProvider;",
+                    "  private Provider<Object> bindStringProvider;")
                 .addLinesIn(
                     DEFAULT_MODE,
-                    "  private Provider<String> provideStringProvider;",
-                    "  private Provider<Object> bindStringProvider;",
-                    "",
                     "  @SuppressWarnings(\"unchecked\")",
                     "  private void initialize() {",
                     "    this.provideStringProvider =",
                     "        SingleCheck.provider(TestModule_ProvideStringFactory.create());",
                     "    this.bindStringProvider =",
                     "        DoubleCheck.provider((Provider) provideStringProvider);",
-                    "  }",
-                    "",
+                    "  }")
+                .addLinesIn(
+                    FAST_INIT_MODE,
+                    "  @SuppressWarnings(\"unchecked\")",
+                    "  private void initialize() {",
+                    "    this.provideStringProvider =",
+                    "        SingleCheck.provider(",
+                    "            new SwitchingProvider<String>(testComponent, 0));",
+                    "    this.bindStringProvider =",
+                    "        DoubleCheck.provider((Provider) provideStringProvider);",
+                    "  }")
+                .addLines(
                     "  @Override",
                     "  public Provider<Object> object() {",
                     "    return bindStringProvider;",
-                    "  }",
-                    "}")
+                    "  }")
                 .addLinesIn(
                     FAST_INIT_MODE,
-                    "  private volatile String string;",
-                    "  private volatile Object object = new MemoizedSentinel();",
-                    "  private volatile Provider<Object> bindStringProvider;",
-                    "",
-                    "  private String string() {",
-                    "    Object local = string;",
-                    "    if (local == null) {",
-                    "      local = TestModule_ProvideStringFactory.provideString();",
-                    "      string = (String) local;",
-                    "    }",
-                    "    return (String) local;",
-                    "  }",
-                    "",
-                    "  private Object object2() {",
-                    "    Object local = object;",
-                    "    if (local instanceof MemoizedSentinel) {",
-                    "      synchronized (local) {",
-                    "        local = object;",
-                    "        if (local instanceof MemoizedSentinel) {",
-                    "          local = string();",
-                    "          object = DoubleCheck.reentrantCheck(object, local);",
-                    "        }",
-                    "      }",
-                    "    }",
-                    "    return (Object) local;",
-                    "  }",
-                    "",
-                    "  @Override",
-                    "  public Provider<Object> object() {",
-                    "    Object local = bindStringProvider;",
-                    "    if (local == null) {",
-                    "      local = new SwitchingProvider<>(0);",
-                    "      bindStringProvider = (Provider<Object>) local;",
-                    "    }",
-                    "    return (Provider<Object>) local;",
-                    "  }",
-                    "",
-                    "  private final class SwitchingProvider<T> implements Provider<T> {",
+                    "  private static final class SwitchingProvider<T> implements Provider<T> {",
                     "    @SuppressWarnings(\"unchecked\")",
                     "    @Override",
                     "    public T get() {",
                     "      switch (id) {",
-                    "        case 0: return (T) DaggerTestComponent.this.object2();",
+                    "        case 0: return (T) TestModule_ProvideStringFactory.provideString();",
                     "        default: throw new AssertionError(id);",
                     "      }",
                     "    }",

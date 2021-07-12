@@ -22,7 +22,7 @@ import static dagger.internal.codegen.extension.DaggerStreams.toImmutableSet;
 import static java.util.stream.Collectors.joining;
 
 import com.google.common.collect.ImmutableSet;
-import dagger.model.BindingGraph.SubcomponentCreatorBindingEdge;
+import dagger.spi.model.BindingGraph.SubcomponentCreatorBindingEdge;
 import javax.lang.model.element.TypeElement;
 
 /** An implementation of {@link SubcomponentCreatorBindingEdge}. */

@@ -18,17 +18,17 @@ package dagger.internal.codegen.validation;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-import com.google.auto.common.MoreElements;
+import androidx.room.compiler.processing.XExecutableElement;
+import androidx.room.compiler.processing.compat.XConverters;
 import com.google.common.collect.ImmutableSet;
-import java.lang.annotation.Annotation;
-import java.util.Set;
+import com.squareup.javapoet.ClassName;
 import javax.annotation.processing.Messager;
 import javax.inject.Inject;
 import javax.lang.model.element.ExecutableElement;
 
 /** A step that validates all binding methods that were not validated while processing modules. */
 public final class BindingMethodProcessingStep
-    extends TypeCheckingProcessingStep<ExecutableElement> {
+    extends XTypeCheckingProcessingStep<XExecutableElement> {
 
   private final Messager messager;
   private final AnyBindingMethodValidator anyBindingMethodValidator;
@@ -36,19 +36,18 @@ public final class BindingMethodProcessingStep
   @Inject
   BindingMethodProcessingStep(
       Messager messager, AnyBindingMethodValidator anyBindingMethodValidator) {
-    super(MoreElements::asExecutable);
     this.messager = messager;
     this.anyBindingMethodValidator = anyBindingMethodValidator;
   }
 
   @Override
-  public Set<? extends Class<? extends Annotation>> annotations() {
+  public ImmutableSet<ClassName> annotationClassNames() {
     return anyBindingMethodValidator.methodAnnotations();
   }
 
   @Override
-  protected void process(
-      ExecutableElement method, ImmutableSet<Class<? extends Annotation>> annotations) {
+  protected void process(XExecutableElement xElement, ImmutableSet<ClassName> annotations) {
+    ExecutableElement method = XConverters.toJavac(xElement);
     checkArgument(
         anyBindingMethodValidator.isBindingMethod(method),
         "%s is not annotated with any of %s",

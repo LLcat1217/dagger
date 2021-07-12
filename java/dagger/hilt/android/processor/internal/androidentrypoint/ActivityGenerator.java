@@ -30,7 +30,6 @@ import javax.lang.model.element.Modifier;
 
 /** Generates an Hilt Activity class for the @AndroidEntryPoint annotated class. */
 public final class ActivityGenerator {
-
   private final ProcessingEnvironment env;
   private final AndroidEntryPointMetadata metadata;
   private final ClassName generatedClassName;
@@ -57,7 +56,9 @@ public final class ActivityGenerator {
     Processors.addGeneratedAnnotation(builder, env, getClass());
 
       Generators.copyConstructors(
-          metadata.baseElement(), CodeBlock.builder().addStatement("init()").build(), builder);
+          metadata.baseElement(),
+          CodeBlock.builder().addStatement("_initHiltInternal()").build(),
+          builder);
       builder.addMethod(init());
 
     metadata.baseElement().getTypeParameters().stream()
@@ -88,7 +89,7 @@ public final class ActivityGenerator {
   //   });
   // }
   private MethodSpec init() {
-    return MethodSpec.methodBuilder("init")
+    return MethodSpec.methodBuilder("_initHiltInternal")
         .addModifiers(Modifier.PRIVATE)
         .addStatement(
             "addOnContextAvailableListener($L)",
@@ -107,7 +108,8 @@ public final class ActivityGenerator {
 
   // @Override
   // public ViewModelProvider.Factory getDefaultViewModelProviderFactory() {
-  //   return DefaultViewModelFactories.getActivityFactory(this);
+  //   return DefaultViewModelFactories.getActivityFactory(
+  //       this, super.getDefaultViewModelProviderFactory());
   // }
   private MethodSpec getDefaultViewModelProviderFactory() {
     return MethodSpec.methodBuilder("getDefaultViewModelProviderFactory")
@@ -115,7 +117,7 @@ public final class ActivityGenerator {
         .addModifiers(Modifier.PUBLIC)
         .returns(AndroidClassNames.VIEW_MODEL_PROVIDER_FACTORY)
         .addStatement(
-            "return $T.getActivityFactory(this)",
+            "return $T.getActivityFactory(this, super.getDefaultViewModelProviderFactory())",
             AndroidClassNames.DEFAULT_VIEW_MODEL_FACTORIES)
         .build();
   }

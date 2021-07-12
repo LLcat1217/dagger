@@ -26,10 +26,22 @@
         android:name=".QualifierInKotlinFieldsTest$TestActivity"
         android:exported="false"/>
     <activity
+        android:name=".UsesSharedComponent1Test$TestActivity"
+        android:exported="false"/>
+    <activity
+        android:name=".UsesSharedComponent2Test$TestActivity"
+        android:exported="false"/>
+    <activity
+        android:name=".UsesSharedComponentEnclosedTest$EnclosedTest$TestActivity"
+        android:exported="false"/>
+    <activity
         android:name=".ViewModelScopedTest$TestActivity"
         android:exported="false"/>
     <activity
         android:name=".ViewModelWithBaseTest$TestActivity"
+        android:exported="false"/>
+    <activity
+        android:name="dagger.hilt.android.testsubpackage.UsesSharedComponent1Test$TestActivity"
         android:exported="false"/>
   </application>
 </manifest>

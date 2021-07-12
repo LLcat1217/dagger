@@ -22,9 +22,12 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static dagger.internal.codegen.base.RequestKinds.requestType;
 import static dagger.internal.codegen.binding.BindingRequest.bindingRequest;
 import static dagger.internal.codegen.langmodel.Accessibility.isTypeAccessibleFrom;
-import static dagger.model.BindingKind.DELEGATE;
+import static dagger.spi.model.BindingKind.DELEGATE;
 
 import com.squareup.javapoet.ClassName;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.Binding;
 import dagger.internal.codegen.binding.BindingGraph;
 import dagger.internal.codegen.binding.BindsTypeChecker;
@@ -32,7 +35,7 @@ import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.RequestKind;
+import dagger.spi.model.RequestKind;
 import javax.lang.model.type.TypeMirror;
 
 /** A {@link dagger.internal.codegen.writing.BindingExpression} for {@code @Binds} methods. */
@@ -43,16 +46,17 @@ final class DelegateBindingExpression extends BindingExpression {
   private final DaggerTypes types;
   private final BindsTypeChecker bindsTypeChecker;
 
+  @AssistedInject
   DelegateBindingExpression(
-      ContributionBinding binding,
-      RequestKind requestKind,
+      @Assisted ContributionBinding binding,
+      @Assisted RequestKind requestKind,
       ComponentBindingExpressions componentBindingExpressions,
       DaggerTypes types,
       DaggerElements elements) {
     this.binding = checkNotNull(binding);
     this.requestKind = checkNotNull(requestKind);
-    this.componentBindingExpressions = checkNotNull(componentBindingExpressions);
-    this.types = checkNotNull(types);
+    this.componentBindingExpressions = componentBindingExpressions;
+    this.types = types;
     this.bindsTypeChecker = new BindsTypeChecker(types, elements);
   }
 
@@ -129,5 +133,10 @@ final class DelegateBindingExpression extends BindingExpression {
     boolean isStrongerScopeThan(ScopeKind other) {
       return this.ordinal() > other.ordinal();
     }
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    DelegateBindingExpression create(ContributionBinding binding, RequestKind requestKind);
   }
 }

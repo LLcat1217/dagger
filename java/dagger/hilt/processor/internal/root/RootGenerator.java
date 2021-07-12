@@ -16,6 +16,7 @@
 
 package dagger.hilt.processor.internal.root;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static dagger.hilt.processor.internal.Processors.toClassNames;
 import static dagger.internal.codegen.extension.DaggerStreams.toImmutableSet;
@@ -44,26 +45,43 @@ import java.util.Map;
 import java.util.Optional;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
 
 /** Generates components and any other classes needed for a root. */
 final class RootGenerator {
 
-  static void generate(RootMetadata metadata, ProcessingEnvironment env) throws IOException {
+  static void generate(
+      ComponentTreeDepsMetadata componentTreeDepsMetadata,
+      RootMetadata metadata,
+      ComponentNames componentNames,
+      ProcessingEnvironment env)
+      throws IOException {
     new RootGenerator(
-        RootMetadata.copyWithNewTree(
-            metadata,
-            filterDescriptors(metadata.componentTree())),
-        env).generateComponents();
+            componentTreeDepsMetadata,
+            RootMetadata.copyWithNewTree(metadata, filterDescriptors(metadata.componentTree())),
+            componentNames,
+            env)
+        .generateComponents();
   }
 
+  private final TypeElement originatingElement;
   private final RootMetadata metadata;
   private final ProcessingEnvironment env;
   private final Root root;
   private final Map<String, Integer> simpleComponentNamesToDedupeSuffix = new HashMap<>();
   private final Map<ComponentDescriptor, ClassName> componentNameMap = new HashMap<>();
+  private final ComponentNames componentNames;
 
-  private RootGenerator(RootMetadata metadata, ProcessingEnvironment env) {
+  private RootGenerator(
+      ComponentTreeDepsMetadata componentTreeDepsMetadata,
+      RootMetadata metadata,
+      ComponentNames componentNames,
+      ProcessingEnvironment env) {
+    this.originatingElement =
+        checkNotNull(
+            env.getElementUtils().getTypeElement(componentTreeDepsMetadata.name().toString()));
     this.metadata = metadata;
+    this.componentNames = componentNames;
     this.env = env;
     this.root = metadata.root();
   }
@@ -71,8 +89,9 @@ final class RootGenerator {
   private void generateComponents() throws IOException {
 
     // TODO(bcorso): Consider moving all of this logic into ComponentGenerator?
+    ClassName componentsWrapperClassName = getComponentsWrapperClassName();
     TypeSpec.Builder componentsWrapper =
-        TypeSpec.classBuilder(getComponentsWrapperClassName())
+        TypeSpec.classBuilder(componentsWrapperClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.FINAL)
             .addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PRIVATE).build());
 
@@ -96,7 +115,6 @@ final class RootGenerator {
           new ComponentGenerator(
                   env,
                   getComponentClassName(componentDescriptor),
-                  root.element(),
                   Optional.empty(),
                   modules,
                   metadata.entryPoints(componentDescriptor.component()),
@@ -104,11 +122,14 @@ final class RootGenerator {
                   ImmutableList.of(),
                   componentAnnotation(componentDescriptor),
                   componentBuilder(componentDescriptor))
-              .generate().toBuilder().addModifiers(Modifier.STATIC).build());
+              .typeSpecBuilder()
+              .addModifiers(Modifier.STATIC)
+              .build());
     }
 
     RootFileFormatter.write(
-        JavaFile.builder(root.classname().packageName(), componentsWrapper.build()).build(),
+        JavaFile.builder(componentsWrapperClassName.packageName(), componentsWrapper.build())
+            .build(),
         env.getFiler());
   }
 
@@ -133,7 +154,7 @@ final class RootGenerator {
   }
 
   private ImmutableMap<ComponentDescriptor, ClassName> subcomponentBuilderModules(
-      TypeSpec.Builder componentsWrapper) throws IOException {
+      TypeSpec.Builder componentsWrapper) {
     ImmutableMap.Builder<ComponentDescriptor, ClassName> modules = ImmutableMap.builder();
     for (ComponentDescriptor descriptor : metadata.componentTree().getComponentDescriptors()) {
       // Root component builders don't have subcomponent builder modules
@@ -154,10 +175,10 @@ final class RootGenerator {
   //   @Binds FooSubcomponentInterfaceBuilder bind(FooSubcomponent.Builder builder);
   // }
   private TypeSpec subcomponentBuilderModule(
-      ClassName componentName, ClassName builderName, ClassName moduleName) throws IOException {
+      ClassName componentName, ClassName builderName, ClassName moduleName) {
     TypeSpec.Builder subcomponentBuilderModule =
         TypeSpec.interfaceBuilder(moduleName)
-            .addOriginatingElement(root.element())
+            .addOriginatingElement(originatingElement)
             .addModifiers(ABSTRACT)
             .addAnnotation(
                 AnnotationSpec.builder(ClassNames.MODULE)
@@ -184,7 +205,7 @@ final class RootGenerator {
         .map(
             creator ->
                 TypeSpec.interfaceBuilder("Builder")
-                    .addOriginatingElement(root.element())
+                    .addOriginatingElement(originatingElement)
                     .addModifiers(STATIC, ABSTRACT)
                     .addSuperinterface(creator)
                     .addAnnotation(componentBuilderAnnotation(descriptor))
@@ -213,7 +234,7 @@ final class RootGenerator {
   }
 
   private ClassName getComponentsWrapperClassName() {
-    return ComponentNames.generatedComponentsWrapper(root.classname());
+    return componentNames.generatedComponentsWrapper(root.originatingRootClassname());
   }
 
   private ClassName getComponentClassName(ComponentDescriptor componentDescriptor) {
@@ -231,8 +252,9 @@ final class RootGenerator {
         ClassNames.SINGLETON_COMPONENT.simpleName(),
         componentDescriptor.component());
 
-    ClassName generatedComponent = ComponentNames.generatedComponent(
-        root.classname(), componentDescriptor.component());
+    ClassName generatedComponent =
+        componentNames.generatedComponent(
+            root.originatingRootClassname(), componentDescriptor.component());
 
     Integer suffix = simpleComponentNamesToDedupeSuffix.get(generatedComponent.simpleName());
     if (suffix != null) {

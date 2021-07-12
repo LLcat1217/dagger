@@ -36,7 +36,7 @@ import dagger.internal.codegen.base.RequestKinds;
 import dagger.internal.codegen.binding.InjectionAnnotations;
 import dagger.internal.codegen.kotlin.KotlinMetadataUtil;
 import dagger.internal.codegen.langmodel.DaggerElements;
-import dagger.model.RequestKind;
+import dagger.spi.model.RequestKind;
 import java.util.Optional;
 import javax.inject.Inject;
 import javax.lang.model.element.AnnotationMirror;
@@ -150,9 +150,10 @@ final class DependencyRequestValidator {
                   + ". Did you mean to inject its assisted factory type instead?",
               requestElement);
         }
-        if (requestKind != RequestKind.INSTANCE && isAssistedFactoryType(typeElement)) {
+        if (!(requestKind == RequestKind.INSTANCE || requestKind == RequestKind.PROVIDER)
+            && isAssistedFactoryType(typeElement)) {
           report.addError(
-              "Dagger does not support injecting Provider<T>, Lazy<T>, Producer<T>, "
+              "Dagger does not support injecting Lazy<T>, Producer<T>, "
                   + "or Produced<T> when T is an @AssistedFactory-annotated type such as "
                   + keyType,
               requestElement);

@@ -16,7 +16,6 @@
 
 package dagger.internal.codegen.binding;
 
-import static com.google.auto.common.MoreElements.getLocalAndInheritedMethods;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static dagger.internal.codegen.binding.SourceFiles.simpleVariableName;
@@ -33,16 +32,11 @@ import com.google.common.base.Equivalence;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.TypeName;
-import dagger.Binds;
-import dagger.BindsOptionalOf;
-import dagger.Provides;
+import dagger.internal.codegen.javapoet.TypeNames;
 import dagger.internal.codegen.kotlin.KotlinMetadataUtil;
 import dagger.internal.codegen.langmodel.DaggerElements;
-import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.BindingKind;
-import dagger.model.Key;
-import dagger.multibindings.Multibinds;
-import dagger.producers.Produces;
+import dagger.spi.model.BindingKind;
+import dagger.spi.model.Key;
 import java.util.Optional;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -115,14 +109,12 @@ public abstract class ComponentRequirement {
    * of the default behavior in {@link #nullPolicy}.
    *
    * <p>Some implementations' null policy can be determined upon construction (e.g., for binding
-   * instances), but others' require Elements and Types, which must wait until {@link #nullPolicy}
-   * is called.
+   * instances), but others' require Elements which must wait until {@link #nullPolicy} is called.
    */
   abstract Optional<NullPolicy> overrideNullPolicy();
 
   /** The requirement's null policy. */
-  public NullPolicy nullPolicy(
-      DaggerElements elements, DaggerTypes types, KotlinMetadataUtil metadataUtil) {
+  public NullPolicy nullPolicy(DaggerElements elements, KotlinMetadataUtil metadataUtil) {
     if (overrideNullPolicy().isPresent()) {
       return overrideNullPolicy().get();
     }
@@ -130,9 +122,7 @@ public abstract class ComponentRequirement {
       case MODULE:
         return componentCanMakeNewInstances(typeElement(), metadataUtil)
             ? NullPolicy.NEW
-            : requiresAPassedInstance(elements, types, metadataUtil)
-                ? NullPolicy.THROW
-                : NullPolicy.ALLOW;
+            : requiresAPassedInstance(elements, metadataUtil) ? NullPolicy.THROW : NullPolicy.ALLOW;
       case DEPENDENCY:
       case BOUND_INSTANCE:
         return NullPolicy.THROW;
@@ -144,13 +134,12 @@ public abstract class ComponentRequirement {
    * Returns true if the passed {@link ComponentRequirement} requires a passed instance in order to
    * be used within a component.
    */
-  public boolean requiresAPassedInstance(
-      DaggerElements elements, DaggerTypes types, KotlinMetadataUtil metadataUtil) {
+  public boolean requiresAPassedInstance(DaggerElements elements, KotlinMetadataUtil metadataUtil) {
     if (!kind().isModule()) {
       // Bound instances and dependencies always require the user to provide an instance.
       return true;
     }
-    return requiresModuleInstance(elements, types, metadataUtil)
+    return requiresModuleInstance(elements, metadataUtil)
         && !componentCanMakeNewInstances(typeElement(), metadataUtil);
   }
 
@@ -164,8 +153,7 @@ public abstract class ComponentRequirement {
    * <p>Alternatively, if the module is a Kotlin Object then the binding methods are considered
    * {@code static}, requiring no module instance.
    */
-  private boolean requiresModuleInstance(
-      DaggerElements elements, DaggerTypes types, KotlinMetadataUtil metadataUtil) {
+  private boolean requiresModuleInstance(DaggerElements elements, KotlinMetadataUtil metadataUtil) {
     boolean isKotlinObject =
         metadataUtil.isObjectClass(typeElement())
             || metadataUtil.isCompanionObjectClass(typeElement());
@@ -173,8 +161,7 @@ public abstract class ComponentRequirement {
       return false;
     }
 
-    ImmutableSet<ExecutableElement> methods =
-        getLocalAndInheritedMethods(typeElement(), types, elements);
+    ImmutableSet<ExecutableElement> methods = elements.getLocalAndInheritedMethods(typeElement());
     return methods.stream()
         .filter(this::isBindingMethod)
         .map(ExecutableElement::getModifiers)
@@ -186,13 +173,13 @@ public abstract class ComponentRequirement {
     // in one place; listing individual annotations all over the place is brittle.
     return isAnyAnnotationPresent(
         method,
-        Provides.class,
-        Produces.class,
+        TypeNames.PROVIDES,
+        TypeNames.PRODUCES,
         // TODO(ronshapiro): it would be cool to have internal meta-annotations that could describe
         // these, like @AbstractBindingMethod
-        Binds.class,
-        Multibinds.class,
-        BindsOptionalOf.class);
+        TypeNames.BINDS,
+        TypeNames.MULTIBINDS,
+        TypeNames.BINDS_OPTIONAL_OF);
   }
 
   /** The key for this requirement, if one is available. */
@@ -227,7 +214,7 @@ public abstract class ComponentRequirement {
   static ComponentRequirement forBoundInstance(Key key, boolean nullable, String variableName) {
     return new AutoValue_ComponentRequirement(
         Kind.BOUND_INSTANCE,
-        MoreTypes.equivalence().wrap(key.type()),
+        MoreTypes.equivalence().wrap(key.type().java()),
         nullable ? Optional.of(NullPolicy.ALLOW) : Optional.empty(),
         Optional.of(key),
         variableName);

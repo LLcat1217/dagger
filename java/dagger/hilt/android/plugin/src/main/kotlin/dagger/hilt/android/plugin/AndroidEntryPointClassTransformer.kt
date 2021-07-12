@@ -81,6 +81,7 @@ internal class AndroidEntryPointClassTransformer(
         if (entry.isClassFile()) {
           val clazz = classPool.makeClass(input, false)
           transformed = transformClassToOutput(clazz) || transformed
+          clazz.detach()
         }
         entry = input.nextEntry
       }
@@ -99,7 +100,9 @@ internal class AndroidEntryPointClassTransformer(
       "Invalid file, '$inputFile' is not a class."
     }
     val clazz = inputFile.inputStream().use { classPool.makeClass(it, false) }
-    return transformClassToOutput(clazz)
+    val transformed = transformClassToOutput(clazz)
+    clazz.detach()
+    return transformed
   }
 
   private fun transformClassToOutput(clazz: CtClass): Boolean {
@@ -184,6 +187,12 @@ internal class AndroidEntryPointClassTransformer(
           val methodRef = CodeArray.readU16bit(code, index + 1)
           val currentClassRef = constantPool.getMethodrefClassName(methodRef)
           if (currentClassRef != oldSuperclassName) {
+            return@forEachInstruction
+          }
+          // If the method reference of the instruction is a constructor, then we should not
+          // rewrite it since its an instantiation and not a `super()` call.
+          val methodRefName = constantPool.getMethodrefName(methodRef)
+          if (methodRefName == "<init>") {
             return@forEachInstruction
           }
           val nameAndTypeRef = constantPool.getMethodrefNameAndType(methodRef)

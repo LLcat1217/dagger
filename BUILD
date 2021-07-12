@@ -79,7 +79,7 @@ jarjar_library(
     name = "shaded_android_processor",
     jars = [
         "//java/dagger/android/processor",
-        "@maven//:com_google_auto_auto_common",
+        "@com_google_auto_auto_common//jar",
     ],
     rules = [
         "rule com.google.auto.common.** dagger.android.shaded.auto.common.@1",
@@ -90,7 +90,7 @@ jarjar_library(
     name = "shaded_grpc_server_processor",
     jars = [
         "//java/dagger/grpc/server/processor",
-        "@maven//:com_google_auto_auto_common",
+        "@com_google_auto_auto_common//jar",
     ],
     rules = [
         "rule com.google.auto.common.** dagger.grpc.shaded.auto.common.@1",
@@ -105,6 +105,7 @@ android_library(
         "@maven//:org_robolectric_shadows_framework",  # For ActivityController
         "@maven//:androidx_lifecycle_lifecycle_common",  # For Lifecycle.State
         "@maven//:androidx_activity_activity",  # For ComponentActivity
+        "@maven//:androidx_test_core",  # For ApplicationProvider
         "@maven//:androidx_test_ext_junit",
         "@maven//:org_robolectric_annotations",
         "@maven//:org_robolectric_robolectric",

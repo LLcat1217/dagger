@@ -17,6 +17,7 @@
 package dagger.hilt.processor.internal;
 
 import com.squareup.javapoet.ClassName;
+import java.util.function.Function;
 
 /**
  * Utility class for getting the generated component name.
@@ -24,24 +25,43 @@ import com.squareup.javapoet.ClassName;
  * <p>This should not be used externally.
  */
 public final class ComponentNames {
-  private ComponentNames() {}
 
-  /** Returns the name of the generated component wrapper. */
-  public static ClassName generatedComponentsWrapper(ClassName root) {
-    return Processors.append(Processors.getEnclosedClassName(root), "_HiltComponents");
-  }
-
-  /** Returns the name of the generated component. */
-  public static ClassName generatedComponent(ClassName root, ClassName component) {
-    return generatedComponentsWrapper(root).nestedClass(componentName(component));
+  /**
+   * Returns an instance of {@link ComponentNames} that will base all component names off of the
+   * given root.
+   */
+  public static ComponentNames withoutRenaming() {
+    return new ComponentNames(Function.identity());
   }
 
   /**
-   * Returns the name of the generated {@link dagger.hilt.android.internal.TestComponentData} for a
-   * test class.
+   * Returns an instance of {@link ComponentNames} that will base all component names off of the
+   * given root after mapping it with {@code rootRenamer}.
    */
-  public static ClassName generatedComponentDataHolder(ClassName testName) {
-    return Processors.append(Processors.getEnclosedClassName(testName), "_ComponentDataHolder");
+  public static ComponentNames withRenaming(Function<ClassName, ClassName> rootRenamer) {
+    return new ComponentNames(rootRenamer);
+  }
+
+  private final Function<ClassName, ClassName> rootRenamer;
+
+  private ComponentNames(Function<ClassName, ClassName> rootRenamer) {
+    this.rootRenamer = rootRenamer;
+  }
+
+  public ClassName generatedComponentTreeDeps(ClassName root) {
+    return Processors.append(
+        Processors.getEnclosedClassName(rootRenamer.apply(root)), "_ComponentTreeDeps");
+  }
+
+  /** Returns the name of the generated component wrapper. */
+  public ClassName generatedComponentsWrapper(ClassName root) {
+    return Processors.append(
+        Processors.getEnclosedClassName(rootRenamer.apply(root)), "_HiltComponents");
+  }
+
+  /** Returns the name of the generated component. */
+  public ClassName generatedComponent(ClassName root, ClassName component) {
+    return generatedComponentsWrapper(root).nestedClass(componentName(component));
   }
 
   /**
@@ -58,4 +78,5 @@ public final class ComponentNames {
     // Note: This uses regex matching so we only match if the name ends in "Component"
     return Processors.getEnclosedName(component).replaceAll("Component$", "C");
   }
+
 }

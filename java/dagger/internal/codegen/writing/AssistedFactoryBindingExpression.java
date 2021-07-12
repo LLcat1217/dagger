@@ -28,13 +28,16 @@ import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.BindingRequest;
 import dagger.internal.codegen.binding.ProvisionBinding;
 import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.DependencyRequest;
-import dagger.model.RequestKind;
+import dagger.spi.model.DependencyRequest;
+import dagger.spi.model.RequestKind;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -50,16 +53,17 @@ final class AssistedFactoryBindingExpression extends SimpleInvocationBindingExpr
   private final DaggerElements elements;
   private final DaggerTypes types;
 
+  @AssistedInject
   AssistedFactoryBindingExpression(
-      ProvisionBinding binding,
+      @Assisted ProvisionBinding binding,
       ComponentBindingExpressions componentBindingExpressions,
       DaggerTypes types,
       DaggerElements elements) {
     super(binding);
     this.binding = checkNotNull(binding);
-    this.componentBindingExpressions = checkNotNull(componentBindingExpressions);
-    this.elements = checkNotNull(elements);
-    this.types = checkNotNull(types);
+    this.componentBindingExpressions = componentBindingExpressions;
+    this.elements = elements;
+    this.types = types;
   }
 
   @Override
@@ -67,14 +71,11 @@ final class AssistedFactoryBindingExpression extends SimpleInvocationBindingExpr
     // An assisted factory binding should have a single request for an assisted injection type.
     DependencyRequest assistedInjectionRequest = getOnlyElement(binding.provisionDependencies());
     Expression assistedInjectionExpression =
-        componentBindingExpressions.getDependencyExpression(
-            BindingRequest.bindingRequest(assistedInjectionRequest.key(), RequestKind.INSTANCE),
-            // This is kind of gross because the anonymous class doesn't really have a name we can
-            // reference. The requesting class name is really only needed to determine if we need to
-            // append "OwningClass.this." to the method call or not.
-            // TODO(bcorso): We should probably use a non-anonymous class here instead so that we
-            // actually have a proper class name.
-            requestingClass.peerClass(""));
+        ((AssistedPrivateMethodBindingExpression)
+                componentBindingExpressions.getBindingExpression(
+                    BindingRequest.bindingRequest(
+                        assistedInjectionRequest.key(), RequestKind.INSTANCE)))
+            .getAssistedDependencyExpression(requestingClass.peerClass(""));
     return Expression.create(
         assistedInjectionExpression.type(),
         CodeBlock.of("$L", anonymousfactoryImpl(assistedInjectionExpression)));
@@ -82,8 +83,8 @@ final class AssistedFactoryBindingExpression extends SimpleInvocationBindingExpr
 
   private TypeSpec anonymousfactoryImpl(Expression assistedInjectionExpression) {
     TypeElement factory = asType(binding.bindingElement().get());
-    DeclaredType factoryType = asDeclared(binding.key().type());
-    ExecutableElement factoryMethod = assistedFactoryMethod(factory, elements, types);
+    DeclaredType factoryType = asDeclared(binding.key().type().java());
+    ExecutableElement factoryMethod = assistedFactoryMethod(factory, elements);
 
     // We can't use MethodSpec.overriding directly because we need to control the parameter names.
     MethodSpec factoryOverride = MethodSpec.overriding(factoryMethod, factoryType, types).build();
@@ -107,5 +108,10 @@ final class AssistedFactoryBindingExpression extends SimpleInvocationBindingExpr
     }
 
     return builder.build();
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    AssistedFactoryBindingExpression create(ProvisionBinding binding);
   }
 }

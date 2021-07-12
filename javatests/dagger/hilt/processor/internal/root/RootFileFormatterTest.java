@@ -17,7 +17,7 @@
 package dagger.hilt.processor.internal.root;
 
 import static com.google.testing.compile.CompilationSubject.assertThat;
-import static dagger.hilt.android.processor.AndroidCompilers.compiler;
+import static dagger.hilt.android.testing.compile.HiltCompilerTests.compiler;
 
 import com.google.common.base.Joiner;
 import com.google.testing.compile.Compilation;
@@ -57,8 +57,8 @@ public final class RootFileFormatterTest {
         .contains(
             JOINER.join(
                 "  public abstract static class SingletonC implements"
-                    + " HiltWrapper_ActivityRetainedComponentManager"
-                    + "_ActivityRetainedComponentBuilderEntryPoint,",
+                + " HiltWrapper_ActivityRetainedComponentManager"
+                + "_ActivityRetainedComponentBuilderEntryPoint,",
                 "      ServiceComponentManager.ServiceComponentBuilderEntryPoint,",
                 "      SingletonComponent,",
                 "      GeneratedComponent,",
@@ -103,11 +103,11 @@ public final class RootFileFormatterTest {
         .contains(
             JOINER.join(
                 "  public abstract static class SingletonC implements"
-                    + " HiltWrapper_ActivityRetainedComponentManager"
-                    + "_ActivityRetainedComponentBuilderEntryPoint,",
+                + " HiltWrapper_ActivityRetainedComponentManager"
+                + "_ActivityRetainedComponentBuilderEntryPoint,",
                 "      ServiceComponentManager.ServiceComponentBuilderEntryPoint,",
                 "      SingletonComponent,",
-                "      GeneratedComponent,",
+                "      TestSingletonComponent,",
                 "      EntryPoint1,",
                 "      EntryPoint2,",
                 "      MyTest_GeneratedInjector {"));
@@ -123,6 +123,37 @@ public final class RootFileFormatterTest {
                 "      GeneratedComponent,",
                 "      EntryPoint3,",
                 "      EntryPoint4 {"));
+  }
+
+  @Test
+  public void testSharedTestComponents() {
+    Compilation compilation =
+        compiler()
+            .withOptions("-Adagger.hilt.shareTestComponents=true")
+            .compile(
+                JavaFileObjects.forSourceLines(
+                    "test.MyTest",
+                    "package test;",
+                    "",
+                    "import dagger.hilt.android.testing.HiltAndroidTest;",
+                    "",
+                    "@HiltAndroidTest",
+                    "public class MyTest {}"),
+                entryPoint("SingletonComponent", "EntryPoint1"));
+    assertThat(compilation).succeeded();
+    assertThat(compilation)
+        .generatedSourceFile("dagger/hilt/android/internal/testing/root/Default_HiltComponents")
+        .contentsAsUtf8String()
+        .contains(
+            JOINER.join(
+                "  public abstract static class SingletonC implements"
+                + " HiltWrapper_ActivityRetainedComponentManager"
+                + "_ActivityRetainedComponentBuilderEntryPoint,",
+                "      ServiceComponentManager.ServiceComponentBuilderEntryPoint,",
+                "      SingletonComponent,",
+                "      TestSingletonComponent,",
+                "      EntryPoint1,",
+                "      MyTest_GeneratedInjector {"));
   }
 
   private static JavaFileObject entryPoint(String component, String name) {

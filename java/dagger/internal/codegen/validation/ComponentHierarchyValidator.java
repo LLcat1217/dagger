@@ -42,7 +42,7 @@ import dagger.internal.codegen.binding.ComponentDescriptor.ComponentMethodDescri
 import dagger.internal.codegen.binding.ModuleDescriptor;
 import dagger.internal.codegen.binding.ModuleKind;
 import dagger.internal.codegen.compileroption.CompilerOptions;
-import dagger.model.Scope;
+import dagger.spi.model.Scope;
 import java.util.Collection;
 import java.util.Formatter;
 import java.util.Map;

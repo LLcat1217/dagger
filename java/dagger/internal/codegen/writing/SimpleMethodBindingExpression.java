@@ -27,16 +27,18 @@ import static dagger.internal.codegen.writing.InjectionMethods.ProvisionMethod.r
 import com.google.auto.common.MoreTypes;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
-import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.binding.ComponentRequirement;
 import dagger.internal.codegen.binding.ProvisionBinding;
 import dagger.internal.codegen.compileroption.CompilerOptions;
 import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.kotlin.KotlinMetadataUtil;
-import dagger.internal.codegen.langmodel.DaggerElements;
+import dagger.internal.codegen.writing.ComponentImplementation.ShardImplementation;
 import dagger.internal.codegen.writing.InjectionMethods.ProvisionMethod;
-import dagger.model.DependencyRequest;
+import dagger.spi.model.DependencyRequest;
 import java.util.Optional;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
@@ -46,7 +48,7 @@ import javax.lang.model.type.TypeMirror;
 
 /**
  * A binding expression that invokes methods or constructors directly (without attempting to scope)
- * {@link dagger.model.RequestKind#INSTANCE} requests.
+ * {@link dagger.spi.model.RequestKind#INSTANCE} requests.
  */
 final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpression {
   private final CompilerOptions compilerOptions;
@@ -54,19 +56,20 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
   private final ComponentBindingExpressions componentBindingExpressions;
   private final MembersInjectionMethods membersInjectionMethods;
   private final ComponentRequirementExpressions componentRequirementExpressions;
-  private final DaggerElements elements;
   private final SourceVersion sourceVersion;
   private final KotlinMetadataUtil metadataUtil;
+  private final ShardImplementation shardImplementation;
 
+  @AssistedInject
   SimpleMethodBindingExpression(
-      ProvisionBinding binding,
+      @Assisted ProvisionBinding binding,
+      MembersInjectionMethods membersInjectionMethods,
       CompilerOptions compilerOptions,
       ComponentBindingExpressions componentBindingExpressions,
-      MembersInjectionMethods membersInjectionMethods,
       ComponentRequirementExpressions componentRequirementExpressions,
-      DaggerElements elements,
       SourceVersion sourceVersion,
-      KotlinMetadataUtil metadataUtil) {
+      KotlinMetadataUtil metadataUtil,
+      ComponentImplementation componentImplementation) {
     super(binding);
     this.compilerOptions = compilerOptions;
     this.provisionBinding = binding;
@@ -78,8 +81,8 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
     this.componentBindingExpressions = componentBindingExpressions;
     this.membersInjectionMethods = membersInjectionMethods;
     this.componentRequirementExpressions = componentRequirementExpressions;
-    this.elements = elements;
     this.sourceVersion = sourceVersion;
+    this.shardImplementation = componentImplementation.shardImplementation(binding);
   }
 
   @Override
@@ -96,6 +99,7 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
             ProvisionMethod.invokeArguments(
                 provisionBinding,
                 request -> dependencyArgument(request, requestingClass).codeBlock(),
+                shardImplementation::getUniqueFieldNameForAssistedParam,
                 requestingClass));
     ExecutableElement method = asExecutable(provisionBinding.bindingElement().get());
     CodeBlock invocation;
@@ -125,7 +129,7 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
   }
 
   private TypeName constructorTypeName(ClassName requestingClass) {
-    DeclaredType type = MoreTypes.asDeclared(provisionBinding.key().type());
+    DeclaredType type = MoreTypes.asDeclared(provisionBinding.key().type().java());
     TypeName typeName = TypeName.get(type);
     if (type.getTypeArguments().stream()
         .allMatch(t -> isTypeAccessibleFrom(t, requestingClass.packageName()))) {
@@ -139,17 +143,19 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
         ProvisionMethod.invoke(
             provisionBinding,
             request -> dependencyArgument(request, requestingClass).codeBlock(),
+            shardImplementation::getUniqueFieldNameForAssistedParam,
             requestingClass,
             moduleReference(requestingClass),
             compilerOptions,
-            metadataUtil));
+            metadataUtil),
+        requestingClass);
   }
 
   private Expression dependencyArgument(DependencyRequest dependency, ClassName requestingClass) {
     return componentBindingExpressions.getDependencyArgumentExpression(dependency, requestingClass);
   }
 
-  private Expression injectMembers(CodeBlock instance) {
+  private Expression injectMembers(CodeBlock instance, ClassName requestingClass) {
     if (provisionBinding.injectionSites().isEmpty()) {
       return Expression.create(simpleMethodReturnType(), instance);
     }
@@ -157,17 +163,15 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
       // Java 7 type inference can't figure out that instance in
       // injectParameterized(Parameterized_Factory.newParameterized()) is Parameterized<T> and not
       // Parameterized<Object>
-      if (!MoreTypes.asDeclared(provisionBinding.key().type()).getTypeArguments().isEmpty()) {
-        TypeName keyType = TypeName.get(provisionBinding.key().type());
+      if (!MoreTypes.asDeclared(provisionBinding.key().type().java())
+          .getTypeArguments()
+          .isEmpty()) {
+        TypeName keyType = TypeName.get(provisionBinding.key().type().java());
         instance = CodeBlock.of("($T) ($T) $L", keyType, rawTypeName(keyType), instance);
       }
     }
-    MethodSpec membersInjectionMethod = membersInjectionMethods.getOrCreate(provisionBinding.key());
-    TypeMirror returnType =
-        membersInjectionMethod.returnType.equals(TypeName.OBJECT)
-            ? elements.getTypeElement(Object.class).asType()
-            : provisionBinding.key().type();
-    return Expression.create(returnType, CodeBlock.of("$N($L)", membersInjectionMethod, instance));
+    return membersInjectionMethods.getInjectExpression(
+        provisionBinding.key(), instance, requestingClass);
   }
 
   private Optional<CodeBlock> moduleReference(ClassName requestingClass) {
@@ -181,6 +185,11 @@ final class SimpleMethodBindingExpression extends SimpleInvocationBindingExpress
   }
 
   private TypeMirror simpleMethodReturnType() {
-    return provisionBinding.contributedPrimitiveType().orElse(provisionBinding.key().type());
+    return provisionBinding.contributedPrimitiveType().orElse(provisionBinding.key().type().java());
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    SimpleMethodBindingExpression create(ProvisionBinding binding);
   }
 }

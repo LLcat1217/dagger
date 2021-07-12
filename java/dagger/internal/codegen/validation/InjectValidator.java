@@ -39,7 +39,7 @@ import dagger.internal.codegen.kotlin.KotlinMetadataUtil;
 import dagger.internal.codegen.langmodel.Accessibility;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.Scope;
+import dagger.spi.model.Scope;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -172,7 +172,7 @@ public final class InjectValidator implements ClearableCache {
     }
 
     for (Scope scope : scopesOf(constructorElement)) {
-      builder.addError(scopeErrorMsg, constructorElement, scope.scopeAnnotation());
+      builder.addError(scopeErrorMsg, constructorElement, scope.scopeAnnotation().java());
     }
 
     for (VariableElement parameter : constructorElement.getParameters()) {
@@ -229,14 +229,14 @@ public final class InjectValidator implements ClearableCache {
         builder.addError(
             "A type with an @AssistedInject-annotated constructor cannot be scoped",
             enclosingElement,
-            scope.scopeAnnotation());
+            scope.scopeAnnotation().java());
       }
     } else if (scopes.size() > 1) {
       for (Scope scope : scopes) {
         builder.addError(
             "A single binding may not declare more than one @Scope",
             enclosingElement,
-            scope.scopeAnnotation());
+            scope.scopeAnnotation().java());
       }
     }
 

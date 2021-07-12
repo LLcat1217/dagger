@@ -29,7 +29,7 @@ compiler_test(
         "@google_bazel_common//third_party/java/compile_testing",
         "@google_bazel_common//third_party/java/junit",
         "@google_bazel_common//third_party/java/truth",
-        "//javatests/dagger/hilt/android/processor:android_compilers",
+        "//java/dagger/hilt/android/testing/compile",
     ],
 )
 
@@ -45,7 +45,7 @@ compiler_test(
         "@google_bazel_common//third_party/java/compile_testing",
         "@google_bazel_common//third_party/java/junit",
         "@google_bazel_common//third_party/java/truth",
-        "//javatests/dagger/hilt/android/processor:android_compilers",
+        "//java/dagger/hilt/android/testing/compile",
     ],
 )
 
@@ -61,7 +61,7 @@ compiler_test(
         "//java/dagger/internal/guava:collect",
         "@google_bazel_common//third_party/java/junit",
         "@google_bazel_common//third_party/java/truth",
-        "//javatests/dagger/hilt/android/processor:android_compilers",
+        "//java/dagger/hilt/android/testing/compile",
         "@maven//:com_github_tschuchortdev_kotlin_compile_testing",
     ],
 )

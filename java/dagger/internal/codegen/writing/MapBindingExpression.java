@@ -22,13 +22,16 @@ import static dagger.internal.codegen.binding.BindingRequest.bindingRequest;
 import static dagger.internal.codegen.binding.MapKeys.getMapKeyExpression;
 import static dagger.internal.codegen.javapoet.CodeBlocks.toParametersCodeBlock;
 import static dagger.internal.codegen.langmodel.Accessibility.isTypeAccessibleFrom;
-import static dagger.model.BindingKind.MULTIBOUND_MAP;
+import static dagger.spi.model.BindingKind.MULTIBOUND_MAP;
 import static javax.lang.model.util.ElementFilter.methodsIn;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.MapBuilder;
 import dagger.internal.codegen.base.MapType;
 import dagger.internal.codegen.binding.BindingGraph;
@@ -37,8 +40,8 @@ import dagger.internal.codegen.binding.ProvisionBinding;
 import dagger.internal.codegen.javapoet.Expression;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.BindingKind;
-import dagger.model.DependencyRequest;
+import dagger.spi.model.BindingKind;
+import dagger.spi.model.DependencyRequest;
 import java.util.Collections;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
@@ -54,8 +57,9 @@ final class MapBindingExpression extends SimpleInvocationBindingExpression {
   private final DaggerTypes types;
   private final DaggerElements elements;
 
+  @AssistedInject
   MapBindingExpression(
-      ProvisionBinding binding,
+      @Assisted ProvisionBinding binding,
       BindingGraph graph,
       ComponentBindingExpressions componentBindingExpressions,
       DaggerTypes types,
@@ -116,7 +120,7 @@ final class MapBindingExpression extends SimpleInvocationBindingExpression {
           instantiation.add(".put($L)", keyAndValueExpression(dependency, requestingClass));
         }
         return Expression.create(
-            isImmutableMapAvailable ? immutableMapType() : binding.key().type(),
+            isImmutableMapAvailable ? immutableMapType() : binding.key().type().java(),
             instantiation.add(".build()").build());
     }
   }
@@ -139,7 +143,7 @@ final class MapBindingExpression extends SimpleInvocationBindingExpression {
   private Expression collectionsStaticFactoryInvocation(
       ClassName requestingClass, CodeBlock methodInvocation) {
     return Expression.create(
-        binding.key().type(),
+        binding.key().type().java(),
         CodeBlock.builder()
             .add("$T.", Collections.class)
             .add(maybeTypeParameters(requestingClass))
@@ -148,7 +152,7 @@ final class MapBindingExpression extends SimpleInvocationBindingExpression {
   }
 
   private CodeBlock maybeTypeParameters(ClassName requestingClass) {
-    TypeMirror bindingKeyType = binding.key().type();
+    TypeMirror bindingKeyType = binding.key().type().java();
     MapType mapType = MapType.from(binding.key());
     return isTypeAccessibleFrom(bindingKeyType, requestingClass.packageName())
         ? CodeBlock.of("<$T, $T>", mapType.keyType(), mapType.valueType())
@@ -166,5 +170,10 @@ final class MapBindingExpression extends SimpleInvocationBindingExpression {
 
   private boolean isImmutableMapAvailable() {
     return elements.getTypeElement(ImmutableMap.class) != null;
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    MapBindingExpression create(ProvisionBinding binding);
   }
 }

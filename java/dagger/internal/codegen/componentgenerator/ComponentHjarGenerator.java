@@ -22,9 +22,9 @@ import static com.google.common.base.CaseFormat.UPPER_CAMEL;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.squareup.javapoet.MethodSpec.constructorBuilder;
 import static dagger.internal.codegen.binding.ComponentCreatorKind.BUILDER;
-import static dagger.internal.codegen.componentgenerator.ComponentGenerator.componentName;
 import static dagger.internal.codegen.javapoet.TypeSpecs.addSupertype;
 import static dagger.internal.codegen.langmodel.Accessibility.isElementAccessibleFrom;
+import static dagger.internal.codegen.writing.ComponentNames.getRootComponentClassName;
 import static javax.lang.model.element.Modifier.ABSTRACT;
 import static javax.lang.model.element.Modifier.FINAL;
 import static javax.lang.model.element.Modifier.PRIVATE;
@@ -33,6 +33,7 @@ import static javax.lang.model.element.Modifier.STATIC;
 
 import com.google.auto.common.MoreTypes;
 import com.google.common.base.Ascii;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.MethodSpec;
@@ -44,11 +45,11 @@ import dagger.internal.codegen.binding.ComponentCreatorDescriptor;
 import dagger.internal.codegen.binding.ComponentCreatorKind;
 import dagger.internal.codegen.binding.ComponentDescriptor;
 import dagger.internal.codegen.binding.ComponentRequirement;
+import dagger.internal.codegen.binding.MethodSignature;
 import dagger.internal.codegen.kotlin.KotlinMetadataUtil;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
 import dagger.producers.internal.CancellationListener;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 import javax.annotation.processing.Filer;
@@ -91,18 +92,13 @@ final class ComponentHjarGenerator extends SourceFileGenerator<ComponentDescript
   }
 
   @Override
-  public ClassName nameGeneratedType(ComponentDescriptor input) {
-    return componentName(input.typeElement());
-  }
-
-  @Override
   public Element originatingElement(ComponentDescriptor input) {
     return input.typeElement();
   }
 
   @Override
-  public Optional<TypeSpec.Builder> write(ComponentDescriptor componentDescriptor) {
-    ClassName generatedTypeName = nameGeneratedType(componentDescriptor);
+  public ImmutableList<TypeSpec.Builder> topLevelTypes(ComponentDescriptor componentDescriptor) {
+    ClassName generatedTypeName = getRootComponentClassName(componentDescriptor);
     TypeSpec.Builder generatedComponent =
         TypeSpec.classBuilder(generatedTypeName)
             .addModifiers(FINAL)
@@ -148,8 +144,7 @@ final class ComponentHjarGenerator extends SourceFileGenerator<ComponentDescript
         && !hasBindsInstanceMethods(componentDescriptor)
         && componentRequirements(componentDescriptor)
             .noneMatch(
-                requirement ->
-                    requirement.requiresAPassedInstance(elements, types, metadataUtil))) {
+                requirement -> requirement.requiresAPassedInstance(elements, metadataUtil))) {
       generatedComponent.addMethod(createMethod(componentDescriptor));
     }
 
@@ -174,7 +169,7 @@ final class ComponentHjarGenerator extends SourceFileGenerator<ComponentDescript
           .addMethod(onProducerFutureCancelledMethod());
     }
 
-    return Optional.of(generatedComponent);
+    return ImmutableList.of(generatedComponent);
   }
 
   private MethodSpec emptyComponentMethod(TypeElement typeElement, ExecutableElement baseMethod) {

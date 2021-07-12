@@ -25,15 +25,20 @@ import static javax.lang.model.util.ElementFilter.methodsIn;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.SetBuilder;
 import dagger.internal.codegen.base.ContributionType;
 import dagger.internal.codegen.base.SetType;
 import dagger.internal.codegen.binding.BindingGraph;
 import dagger.internal.codegen.binding.ProvisionBinding;
+import dagger.internal.codegen.javapoet.CodeBlocks;
 import dagger.internal.codegen.javapoet.Expression;
+import dagger.internal.codegen.javapoet.TypeNames;
 import dagger.internal.codegen.langmodel.DaggerElements;
 import dagger.internal.codegen.langmodel.DaggerTypes;
-import dagger.model.DependencyRequest;
+import dagger.spi.model.DependencyRequest;
 import java.util.Collections;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
@@ -46,8 +51,9 @@ final class SetBindingExpression extends SimpleInvocationBindingExpression {
   private final DaggerTypes types;
   private final DaggerElements elements;
 
+  @AssistedInject
   SetBindingExpression(
-      ProvisionBinding binding,
+      @Assisted ProvisionBinding binding,
       BindingGraph graph,
       ComponentBindingExpressions componentBindingExpressions,
       DaggerTypes types,
@@ -120,7 +126,7 @@ final class SetBindingExpression extends SimpleInvocationBindingExpression {
         }
         instantiation.add(".build()");
         return Expression.create(
-            isImmutableSetAvailable ? immutableSetType() : binding.key().type(),
+            isImmutableSetAvailable ? immutableSetType() : binding.key().type().java(),
             instantiation.build());
     }
   }
@@ -132,15 +138,23 @@ final class SetBindingExpression extends SimpleInvocationBindingExpression {
 
   private CodeBlock getContributionExpression(
       DependencyRequest dependency, ClassName requestingClass) {
-    return componentBindingExpressions
-        .getDependencyExpression(bindingRequest(dependency), requestingClass)
-        .codeBlock();
+    BindingExpression bindingExpression =
+        componentBindingExpressions.getBindingExpression(bindingRequest(dependency));
+    CodeBlock expression = bindingExpression.getDependencyExpression(requestingClass).codeBlock();
+
+    // Add a cast to "(Set)" when the contribution is a raw "Provider" type because the "addAll()"
+    // method expects a collection. For example, ".addAll((Set) provideInaccessibleSetOfFoo.get())"
+    return !isSingleValue(dependency)
+            && bindingExpression instanceof DerivedFromFrameworkInstanceBindingExpression
+            && !isTypeAccessibleFrom(binding.key().type().java(), requestingClass.packageName())
+        ? CodeBlocks.cast(expression, TypeNames.SET)
+        : expression;
   }
 
   private Expression collectionsStaticFactoryInvocation(
       ClassName requestingClass, CodeBlock methodInvocation) {
     return Expression.create(
-        binding.key().type(),
+        binding.key().type().java(),
         CodeBlock.builder()
             .add("$T.", Collections.class)
             .add(maybeTypeParameter(requestingClass))
@@ -172,5 +186,10 @@ final class SetBindingExpression extends SimpleInvocationBindingExpression {
 
   private boolean isImmutableSetAvailable() {
     return elements.getTypeElement(ImmutableSet.class) != null;
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    SetBindingExpression create(ProvisionBinding binding);
   }
 }

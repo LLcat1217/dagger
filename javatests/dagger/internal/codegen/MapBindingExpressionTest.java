@@ -21,7 +21,6 @@ import static dagger.internal.codegen.CompilerMode.DEFAULT_MODE;
 import static dagger.internal.codegen.CompilerMode.FAST_INIT_MODE;
 import static dagger.internal.codegen.Compilers.CLASS_PATH_WITHOUT_GUAVA_OPTION;
 import static dagger.internal.codegen.Compilers.compilerWithOptions;
-import static dagger.internal.codegen.GeneratedLines.GENERATED_CODE_ANNOTATIONS;
 
 import com.google.testing.compile.Compilation;
 import com.google.testing.compile.Compiler;
@@ -90,51 +89,21 @@ public class MapBindingExpressionTest {
             .addLines(
                 "package test;",
                 "",
-                "import dagger.internal.MapBuilder;",
-                "",
-                GENERATED_CODE_ANNOTATIONS,
+                GeneratedLines.generatedAnnotations(),
                 "final class DaggerTestComponent implements TestComponent {")
             .addLinesIn(
                 FAST_INIT_MODE,
-                "  private volatile Provider<Integer> provideIntProvider;",
-                "  private volatile Provider<Long> provideLong0Provider;",
-                "  private volatile Provider<Long> provideLong1Provider;",
-                "  private volatile Provider<Long> provideLong2Provider;",
+                "  private Provider<Integer> provideIntProvider;",
+                "  private Provider<Long> provideLong0Provider;",
+                "  private Provider<Long> provideLong1Provider;",
+                "  private Provider<Long> provideLong2Provider;",
                 "",
-                "  private Provider<Integer> provideIntProvider() {",
-                "    Object local = provideIntProvider;",
-                "    if (local == null) {",
-                "      local = new SwitchingProvider<>(0);",
-                "      provideIntProvider = (Provider<Integer>) local;",
-                "    }",
-                "    return (Provider<Integer>) local;",
-                "  }",
-                "",
-                "  private Provider<Long> provideLong0Provider() {",
-                "    Object local = provideLong0Provider;",
-                "    if (local == null) {",
-                "      local = new SwitchingProvider<>(1);",
-                "      provideLong0Provider = (Provider<Long>) local;",
-                "    }",
-                "    return (Provider<Long>) local;",
-                "  }",
-                "",
-                "  private Provider<Long> provideLong1Provider() {",
-                "    Object local = provideLong1Provider;",
-                "    if (local == null) {",
-                "      local = new SwitchingProvider<>(2);",
-                "      provideLong1Provider = (Provider<Long>) local;",
-                "    }",
-                "    return (Provider<Long>) local;",
-                "  }",
-                "",
-                "  private Provider<Long> provideLong2Provider() {",
-                "    Object local = provideLong2Provider;",
-                "    if (local == null) {",
-                "      local = new SwitchingProvider<>(3);",
-                "      provideLong2Provider = (Provider<Long>) local;",
-                "    }",
-                "    return (Provider<Long>) local;",
+                "  @SuppressWarnings(\"unchecked\")",
+                "  private void initialize() {",
+                "    this.provideIntProvider = new SwitchingProvider<>(testComponent, 0);",
+                "    this.provideLong0Provider = new SwitchingProvider<>(testComponent, 1);",
+                "    this.provideLong1Provider = new SwitchingProvider<>(testComponent, 2);",
+                "    this.provideLong2Provider = new SwitchingProvider<>(testComponent, 3);",
                 "  }")
             .addLines(
                 "  @Override",
@@ -149,7 +118,8 @@ public class MapBindingExpressionTest {
                 "",
                 "  @Override",
                 "  public Map<Integer, Integer> ints() {",
-                "    return Collections.<Integer, Integer>singletonMap(0, MapModule.provideInt());",
+                "    return Collections.<Integer, Integer>",
+                "        singletonMap(0, MapModule.provideInt());",
                 "  }",
                 "",
                 "  @Override",
@@ -158,9 +128,7 @@ public class MapBindingExpressionTest {
             .addLinesIn(
                 DEFAULT_MODE, //
                 "        0, MapModule_ProvideIntFactory.create());")
-            .addLinesIn(
-                FAST_INIT_MODE,
-                "        0, provideIntProvider());")
+            .addLinesIn(FAST_INIT_MODE, "        0, provideIntProvider;")
             .addLines(
                 "  }",
                 "",
@@ -183,20 +151,14 @@ public class MapBindingExpressionTest {
                 "        .put(2L, MapModule_ProvideLong2Factory.create())")
             .addLinesIn(
                 FAST_INIT_MODE,
-                "        .put(0L, provideLong0Provider())",
-                "        .put(1L, provideLong1Provider())",
-                "        .put(2L, provideLong2Provider())")
+                "        .put(0L, provideLong0Provider)",
+                "        .put(1L, provideLong1Provider)",
+                "        .put(2L, provideLong2Provider)")
             .addLines( //
                 "        .build();", "  }")
             .addLinesIn(
                 FAST_INIT_MODE,
-                "  private final class SwitchingProvider<T> implements Provider<T> {",
-                "    private final int id;",
-                "",
-                "    SwitchingProvider(int id) {",
-                "      this.id = id;",
-                "    }",
-                "",
+                "  private static final class SwitchingProvider<T> implements Provider<T> {",
                 "    @SuppressWarnings(\"unchecked\")",
                 "    @Override",
                 "    public T get() {",
@@ -274,7 +236,7 @@ public class MapBindingExpressionTest {
             "import other.UsesInaccessible;",
             "import other.UsesInaccessible_Factory;",
             "",
-            GENERATED_CODE_ANNOTATIONS,
+            GeneratedLines.generatedAnnotations(),
             "final class DaggerTestComponent implements TestComponent {",
             "  @Override",
             "  public UsesInaccessible usesInaccessible() {",
@@ -337,17 +299,16 @@ public class MapBindingExpressionTest {
             "test.DaggerParent",
             "package test;",
             "",
-            GENERATED_CODE_ANNOTATIONS,
+            GeneratedLines.generatedAnnotations(),
             "final class DaggerParent implements Parent {",
             "  private final ParentModule parentModule;",
             "",
-            "  private final class ChildImpl implements Child {",
+            "  private static final class ChildImpl implements Child {",
             "    @Override",
             "    public Map<String, Object> objectMap() {",
             "      return Collections.<String, Object>singletonMap(",
             "          \"parent key\",",
-            "          ParentModule_ParentKeyObjectFactory.parentKeyObject(",
-            "              DaggerParent.this.parentModule));",
+            "          ParentModule_ParentKeyObjectFactory.parentKeyObject(parent.parentModule));",
             "    }",
             "  }",
             "}");

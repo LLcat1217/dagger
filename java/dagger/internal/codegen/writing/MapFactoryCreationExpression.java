@@ -22,13 +22,16 @@ import static dagger.internal.codegen.binding.SourceFiles.mapFactoryClassName;
 
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.CodeBlock;
+import dagger.assisted.Assisted;
+import dagger.assisted.AssistedFactory;
+import dagger.assisted.AssistedInject;
 import dagger.internal.codegen.base.MapType;
 import dagger.internal.codegen.binding.BindingGraph;
 import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.langmodel.DaggerElements;
-import dagger.model.DependencyRequest;
 import dagger.producers.Produced;
 import dagger.producers.Producer;
+import dagger.spi.model.DependencyRequest;
 import javax.inject.Provider;
 import javax.lang.model.type.TypeMirror;
 
@@ -40,24 +43,25 @@ final class MapFactoryCreationExpression extends MultibindingFactoryCreationExpr
   private final ContributionBinding binding;
   private final DaggerElements elements;
 
+  @AssistedInject
   MapFactoryCreationExpression(
-      ContributionBinding binding,
+      @Assisted ContributionBinding binding,
       ComponentImplementation componentImplementation,
       ComponentBindingExpressions componentBindingExpressions,
       BindingGraph graph,
       DaggerElements elements) {
     super(binding, componentImplementation, componentBindingExpressions);
     this.binding = checkNotNull(binding);
-    this.componentImplementation = checkNotNull(componentImplementation);
-    this.graph = checkNotNull(graph);
-    this.elements = checkNotNull(elements);
+    this.componentImplementation = componentImplementation;
+    this.graph = graph;
+    this.elements = elements;
   }
 
   @Override
   public CodeBlock creationExpression() {
     CodeBlock.Builder builder = CodeBlock.builder().add("$T.", mapFactoryClassName(binding));
     if (!useRawType()) {
-      MapType mapType = MapType.from(binding.key().type());
+      MapType mapType = MapType.from(binding.key().type().java());
       // TODO(ronshapiro): either inline this into mapFactoryClassName, or add a
       // mapType.unwrappedValueType() method that doesn't require a framework type
       TypeMirror valueType = mapType.valueType();
@@ -83,5 +87,10 @@ final class MapFactoryCreationExpression extends MultibindingFactoryCreationExpr
     builder.add(".build()");
 
     return builder.build();
+  }
+
+  @AssistedFactory
+  static interface Factory {
+    MapFactoryCreationExpression create(ContributionBinding binding);
   }
 }

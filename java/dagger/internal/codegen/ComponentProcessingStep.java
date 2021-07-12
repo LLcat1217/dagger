@@ -24,10 +24,13 @@ import static dagger.internal.codegen.base.ComponentAnnotation.subcomponentAnnot
 import static dagger.internal.codegen.binding.ComponentCreatorAnnotation.allCreatorAnnotations;
 import static java.util.Collections.disjoint;
 
+import androidx.room.compiler.processing.XTypeElement;
+import androidx.room.compiler.processing.compat.XConverters;
 import com.google.auto.common.BasicAnnotationProcessor.ProcessingStep;
 import com.google.auto.common.MoreElements;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.squareup.javapoet.ClassName;
 import dagger.internal.codegen.base.SourceFileGenerator;
 import dagger.internal.codegen.binding.BindingGraph;
 import dagger.internal.codegen.binding.BindingGraphFactory;
@@ -37,9 +40,8 @@ import dagger.internal.codegen.validation.BindingGraphValidator;
 import dagger.internal.codegen.validation.ComponentCreatorValidator;
 import dagger.internal.codegen.validation.ComponentDescriptorValidator;
 import dagger.internal.codegen.validation.ComponentValidator;
-import dagger.internal.codegen.validation.TypeCheckingProcessingStep;
 import dagger.internal.codegen.validation.ValidationReport;
-import java.lang.annotation.Annotation;
+import dagger.internal.codegen.validation.XTypeCheckingProcessingStep;
 import java.util.Set;
 import javax.annotation.processing.Messager;
 import javax.inject.Inject;
@@ -50,7 +52,7 @@ import javax.lang.model.element.TypeElement;
  * A {@link ProcessingStep} that is responsible for dealing with a component or production component
  * as part of the {@link ComponentProcessor}.
  */
-final class ComponentProcessingStep extends TypeCheckingProcessingStep<TypeElement> {
+final class ComponentProcessingStep extends XTypeCheckingProcessingStep<XTypeElement> {
   private final Messager messager;
   private final ComponentValidator componentValidator;
   private final ComponentCreatorValidator creatorValidator;
@@ -70,7 +72,6 @@ final class ComponentProcessingStep extends TypeCheckingProcessingStep<TypeEleme
       BindingGraphFactory bindingGraphFactory,
       SourceFileGenerator<BindingGraph> componentGenerator,
       BindingGraphValidator bindingGraphValidator) {
-    super(MoreElements::asType);
     this.messager = messager;
     this.componentValidator = componentValidator;
     this.creatorValidator = creatorValidator;
@@ -82,13 +83,14 @@ final class ComponentProcessingStep extends TypeCheckingProcessingStep<TypeEleme
   }
 
   @Override
-  public Set<Class<? extends Annotation>> annotations() {
+  public Set<ClassName> annotationClassNames() {
     return union(allComponentAnnotations(), allCreatorAnnotations());
   }
 
   @Override
-  protected void process(
-      TypeElement element, ImmutableSet<Class<? extends Annotation>> annotations) {
+  protected void process(XTypeElement xElement, ImmutableSet<ClassName> annotations) {
+    // TODO(bcorso): Remove conversion to javac type and use XProcessing throughout.
+    TypeElement element = XConverters.toJavac(xElement);
     if (!disjoint(annotations, rootComponentAnnotations())) {
       processRootComponent(element);
     }

@@ -20,8 +20,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static dagger.internal.codegen.langmodel.Accessibility.isTypeAccessibleFrom;
 
 import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.CodeBlock;
-import com.squareup.javapoet.FieldSpec;
 import dagger.internal.codegen.binding.ContributionBinding;
 import dagger.internal.codegen.binding.FrameworkType;
 import dagger.internal.codegen.javapoet.Expression;
@@ -49,10 +47,8 @@ abstract class FrameworkInstanceBindingExpression extends BindingExpression {
   }
 
   /**
-   * The expression for the framework instance for this binding. The field will be {@link
-   * ComponentImplementation#addInitialization(CodeBlock) initialized} and {@link
-   * ComponentImplementation#addField(ComponentImplementation.FieldSpecKind, FieldSpec) added} to
-   * the component the first time this method is invoked.
+   * The expression for the framework instance for this binding. The field will be initialized and
+   * added to the component the first time this method is invoked.
    */
   @Override
   Expression getDependencyExpression(ClassName requestingClass) {

@@ -38,7 +38,6 @@ import java.util.Optional;
 import java.util.Set;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
 
 /** Generates a Dagger component or subcomponent interface. */
 final class ComponentGenerator {
@@ -50,7 +49,6 @@ final class ComponentGenerator {
 
   private final ProcessingEnvironment processingEnv;
   private final ClassName name;
-  private final TypeElement rootElement;
   private final Optional<ClassName> superclass;
   private final ImmutableList<ClassName> modules;
   private final ImmutableList<TypeName> entryPoints;
@@ -62,7 +60,6 @@ final class ComponentGenerator {
   public ComponentGenerator(
       ProcessingEnvironment processingEnv,
       ClassName name,
-      TypeElement rootElement,
       Optional<ClassName> superclass,
       Set<? extends ClassName> modules,
       Set<? extends TypeName> entryPoints,
@@ -72,7 +69,6 @@ final class ComponentGenerator {
       Optional<TypeSpec> componentBuilder) {
     this.processingEnv = processingEnv;
     this.name = name;
-    this.rootElement = rootElement;
     this.superclass = superclass;
     this.modules = modules.stream().sorted(SIMPLE_NAME_SORTER).collect(toImmutableList());
     this.entryPoints = entryPoints.stream().sorted(TYPE_NAME_SORTER).collect(toImmutableList());
@@ -82,25 +78,24 @@ final class ComponentGenerator {
     this.componentBuilder = componentBuilder;
   }
 
-  public TypeSpec generate() throws IOException {
-    TypeSpec.Builder generator =
+  public TypeSpec.Builder typeSpecBuilder() throws IOException {
+    TypeSpec.Builder builder =
         TypeSpec.classBuilder(name)
             // Public because components from a scope below must reference to create
             .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
-            .addOriginatingElement(rootElement)
             .addAnnotation(getComponentAnnotation());
 
-    componentBuilder.ifPresent(generator::addType);
+    componentBuilder.ifPresent(builder::addType);
 
-    scopes.forEach(generator::addAnnotation);
+    scopes.forEach(builder::addAnnotation);
 
-    addEntryPoints(generator);
+    addEntryPoints(builder);
 
-    superclass.ifPresent(generator::superclass);
+    superclass.ifPresent(builder::superclass);
 
-    generator.addAnnotations(extraAnnotations);
+    builder.addAnnotations(extraAnnotations);
 
-    return generator.build();
+    return builder;
   }
 
   /** Returns the component annotation with the list of modules to install for the component. */
@@ -161,7 +156,6 @@ final class ComponentGenerator {
             Processors.getEnclosedClassName(name), "_EntryPointPartition" + partitionIndex);
     TypeSpec.Builder builder =
         TypeSpec.interfaceBuilder(partitionName)
-            .addOriginatingElement(rootElement)
             .addModifiers(Modifier.ABSTRACT)
             .addSuperinterfaces(partition);
 

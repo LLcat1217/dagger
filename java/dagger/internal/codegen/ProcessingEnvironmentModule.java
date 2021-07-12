@@ -21,16 +21,17 @@ import dagger.Binds;
 import dagger.Module;
 import dagger.Provides;
 import dagger.Reusable;
-import dagger.internal.codegen.SpiModule.ProcessorClassLoader;
+import dagger.internal.codegen.base.ClearableCache;
 import dagger.internal.codegen.compileroption.CompilerOptions;
 import dagger.internal.codegen.compileroption.ProcessingEnvironmentCompilerOptions;
 import dagger.internal.codegen.compileroption.ProcessingOptions;
 import dagger.internal.codegen.langmodel.DaggerElements;
-import dagger.spi.BindingGraphPlugin;
+import dagger.multibindings.IntoSet;
 import java.util.Map;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.inject.Singleton;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.util.Types;
 
@@ -73,13 +74,12 @@ interface ProcessingEnvironmentModule {
   }
 
   @Provides
+  @Singleton
   static DaggerElements daggerElements(ProcessingEnvironment processingEnvironment) {
     return new DaggerElements(processingEnvironment);
   }
 
-  @Provides
-  @ProcessorClassLoader
-  static ClassLoader processorClassloader(ProcessingEnvironment processingEnvironment) {
-    return BindingGraphPlugin.class.getClassLoader();
-  }
+  @Binds
+  @IntoSet
+  ClearableCache daggerElementAsClearableCache(DaggerElements elements);
 }

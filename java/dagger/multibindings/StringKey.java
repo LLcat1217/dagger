@@ -16,17 +16,17 @@
 
 package dagger.multibindings;
 
-import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 import dagger.MapKey;
 import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /** A {@link MapKey} annotation for maps with {@link String} keys. */
 @Documented
-@Target(METHOD)
+@Target({ElementType.METHOD, ElementType.FIELD})
 @Retention(RUNTIME)
 @MapKey
 public @interface StringKey {
